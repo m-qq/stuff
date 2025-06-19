@@ -1,7 +1,7 @@
 local API		= require("api")
 local aura 		= require("AURAS")
-local whichAura 	= "legendary lumberjack"
-
+local whichAura 	= "legendary call of the sea"
+aura.yourbankpin 	= 0000
 
 -- usage loop
 while API.Read_LoopyLoop() do
