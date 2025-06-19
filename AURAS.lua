@@ -1,6 +1,6 @@
 local AURAS = {}
 local API   = require("api")
-local yourbankpin = 1111  -- bank pin required when clicking some aura interfaces
+AURAS.yourbankpin  = 0000
 
 API.Write_fake_mouse_do(false)
 
@@ -338,7 +338,7 @@ end
 function AURAS.maybeEnterPin()
     if API.VB_FindPSettinOrder(2874).state == 18 then
         print("[PIN] PIN window detected -> entering PIN")
-        API.DoBankPin(yourbankpin)
+        API.DoBankPin(AURAS.yourbankpin)
         API.RandomSleep2(math.random(1200,2400),200,200)
 
         local s = API.VB_FindPSettinOrder(2874).state
