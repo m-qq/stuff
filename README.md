@@ -70,13 +70,20 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
 ### Basic Example
 
 ```lua
-local AURAS = require("AURAS")
+local API		= require("api")
+local aura 		= require("AURAS")
+local whichAura 	= "legendary call of the sea"
+aura.yourbankpin 	= 1234
 
--- Configure your bank pin
-AURAS.yourbankpin = 1234
-
--- Activate the "penance" aura
-AURAS.activateAura("penance")  -- Opens interfaces, resets if needed, extends, and activates
+-- usage loop
+while API.Read_LoopyLoop() do
+    if not aura.isAuraActive() then
+        aura.activateAura(whichAura)
+    else
+        print("[DEBUG] - An aura is already active")
+    end
+    API.RandomSleep2(math.random(1200,2400), 200, 200)
+end
 ```
 
 ## API Reference
