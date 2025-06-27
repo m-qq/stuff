@@ -28,7 +28,7 @@ A lightweight Lua module to automate aura management in your game client. This l
 
 ## Prerequisites
 
-* **API module**: Provides methods for interface actions, scanning UI elements, and premium checks
+* **API module**: Provides methods for interface actions, scanning UI elements, etc.
 
 Ensure the `api.lua` module is available on your `package.path`:
 
