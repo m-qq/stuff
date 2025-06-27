@@ -61,7 +61,7 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
    ```lua
    -- Example: Add "myAura" with decimal ID 30000
    local decimalId = 30000
-   local hexAddr = AURAS.decToHex(decimalId)  -- "0x7530"
+   local hexAddr = 0x7530  -- convert decimal value to hex
    AURAS.auraActions.myAura = { row=120, addr=hexAddr, id=decimalId, resetTypes={1,2} }
    ```
 
@@ -91,7 +91,6 @@ end
 | Function                     | Description                                                                      |
 | ---------------------------- | -------------------------------------------------------------------------------- |
 | `AURAS.verifyAuras()`        | Ensures every `id` matches its `addr` mapping.                                   |
-| `AURAS.decToHex(n)`          | Converts a decimal integer to a hexadecimal string (e.g., `0x1A2B`).             |
 | `AURAS.openEquipment()`      | Opens the equipment interface tab.                                               |
 | `AURAS.openAuraWindow()`     | Opens the aura management window.                                                |
 | `AURAS.selectAura(name)`     | Selects the specified aura by name.                                              |
