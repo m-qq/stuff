@@ -59,14 +59,12 @@ end
 ## Script Overview
 
 * **WorldHop.getCurrentWorld()**: Scans the on-screen interface to read the current world number.
-* **rldID)**: Clicks the chosen world and waits for login confirmation.
+* **WorldHop.pickWorld(worldID)**: Clicks the chosen world and waits for login confirmation.
+* **WorldHop.chooseNewWorld(currentWorld)**: Selects a new world not in the recent history.
+* **WorldHop.openLogoutMenu() / openWorldMenu()**: Opens the mini and main logout/world menus with retry logic.
 * **WorldHop.hopWorld()**: Full sequence to log out, open menus, pick a new world, and track history.
 * **WorldHop.checkHopWorlds()**: Checks elapsed time and triggers `hopWorld()` when the duration is exceeded.
 
 ## Contributing
 
 Contributions and bug reports are welcome! Feel free to [open an issue](https://github.com/<your-username>/WorldHop/issues) or [submit a pull request](https://github.com/<your-username>/WorldHop/pulls).
-
-* **WorldHop.chooseNewWorld(currentWorld)**: Selects a new world not in the recent history.
-* **WorldHop.openLogoutMenu()** / **openWorldMenu()**: Opens the mini and main logout/world menus with retry logic.
-* **WorldHop.pickWorld(wo**
