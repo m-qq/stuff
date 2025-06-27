@@ -165,12 +165,6 @@ function AURAS.verifyAuras(auraDefs)
     return mismatches
 end
 
-function AURAS.decToHex(n)
-    assert(type(n) == "number" and n >= 0 and n == math.floor(n),
-           "decToHex: input must be a non-negative integer")
-    return string.format("0x%x", n)
-end
-
 function AURAS.openEquipment()
     for i = 1, 3 do
         if API.VB_FindPSettinOrder(3074).state == 1 then
@@ -202,7 +196,7 @@ function AURAS.openAuraWindow()
             API.DoAction_Interface(0xffffffff, 0xffffffff, 1, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         elseif AURAS.isAuraActive() then
             local equippedId = API.GetEquipSlot(11).itemid1
-            API.DoAction_Interface(0xffffffff, tonumber(AURAS.decToHex(equippedId)), 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
+            API.DoAction_Interface(0xffffffff, equippedId, 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         end
         API.RandomSleep2(math.random(1200,2400), 200, 200)
     end
