@@ -1,11 +1,13 @@
+--[[
+    WorldHop.lua
+	Last update: 06/27/25 by <@600408294003048450>
+        * Initial release
+]]
+
 local WorldHop = {}
 local API = require("api")
 
--- Configuration
-
---[[
-	NOTE: the delays are long to account for low pc specs. you can speed it up if you want
-]]
+--NOTE: the delays are long to account for low pc specs. you can speed it up if you want
 
 local swapForDuration   = true			-- should we swap worlds?
 local worldChanges      = 0			-- running count of # of world changes
@@ -214,3 +216,11 @@ function WorldHop.checkHopWorlds()
 end
 
 return WorldHop
+
+--[[
+    WorldHop.lua
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files to use them
+    without restriction, including without limitation to the rights
+    to use, copy, modify, merge, publish, and distribute. 
+]]
