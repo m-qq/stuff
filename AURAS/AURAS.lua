@@ -1,3 +1,9 @@
+--[[
+    AURAS.lua
+	Last update: 06/27/25 by <@600408294003048450>
+        * Removed decToHex() 
+]]
+
 local AURAS = {}
 local API   = require("api")
 AURAS.yourbankpin  = 0000
@@ -543,3 +549,11 @@ function AURAS.activateAura(auraName)
 end
 
 return AURAS
+
+--[[
+    AURAS.lua
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files to use them
+    without restriction, including without limitation to the rights
+    to use, copy, modify, merge, publish, and distribute. 
+]]
