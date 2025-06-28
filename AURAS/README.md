@@ -12,7 +12,7 @@ A lightweight Lua module to automate aura management in your game client. This l
 * [Configuration](#configuration)
 * [Usage](#usage)
   * [Basic Example](#basic-example)
-* [API Reference](#api-reference)
+* [API Reference](#api-reference)  
 * [Contributing](#contributing)
 
 ---
@@ -45,7 +45,7 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
 2. Require the module in your Lua script:
 
    ```lua
-   local AURAS = require("AURAS")
+   local AURAS = require("AURAS").pin(0000)	-- enter your bank pin
    ```
 
 ## Configuration
@@ -53,7 +53,7 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
 1. **Bank PIN** — Set your bank PIN to allow automatic PIN entry when extending auras:
 
    ```lua
-   AURAS.yourbankpin = 1234  -- Replace with your actual PIN
+   local aura     		= require("AURAS").pin(0000)	-- require AURAS library & enter your bank pin
    ```
    
 2. **Add Custom Auras** — To add your own aura mappings, convert the aura's ID from decimal to hex and add it to the `AURAS.auraActions` table:
@@ -70,40 +70,46 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
 ### Basic Example
 
 ```lua
-local API		= require("api")
-local aura 		= require("AURAS")
-local whichAura 	= "legendary call of the sea"
-aura.yourbankpin 	= 1234
+local API      		= require("api")		-- require api
+local aura     		= require("AURAS").pin(0000)	-- require AURAS library & enter your bank pin
+local whichAura		= "legendary call of the sea"	-- enter the desired aura
 
--- usage loop
+-- usage example
 while API.Read_LoopyLoop() do
-    if not aura.isAuraActive() then
-        aura.activateAura(whichAura)
-    else
-        print("[DEBUG] - An aura is already active")
-    end
-    API.RandomSleep2(math.random(1200,2400), 200, 200)
+  API.RandomSleep2(math.random(1200,2400),200,200)
+
+  print("[DEBUG] Remaining:", aura.auraTimeRemaining(), "-> refresh at", aura.auraRefreshTime)
+  if aura.auraTimeRemaining() <= aura.auraRefreshTime then
+    aura.activateAura(whichAura)
+  end
 end
 ```
 
 ## API Reference
 
-| Function                     | Description                                                                      |
-| ---------------------------- | -------------------------------------------------------------------------------- |
-| `AURAS.verifyAuras()`        | Ensures every `id` matches its `addr` mapping.                                   |
-| `AURAS.openEquipment()`      | Opens the equipment interface tab.                                               |
-| `AURAS.openAuraWindow()`     | Opens the aura management window.                                                |
-| `AURAS.selectAura(name)`     | Selects the specified aura by name.                                              |
-| `AURAS.parseVisCost(raw)`    | Parses a string like "1.2M" into a numeric Vis cost of 1200000.                  |
-| `AURAS.parseAvailableVis()`  | Reads the available Vis displayed in the interface.                              |
-| `AURAS.getResetCounts()`     | Returns a table with counts of generic and tiered resets.                        |
-| `AURAS.getAuraResetCount()`  | Determines how many resets you can use for a specific aura.                      |
-| `AURAS.maybeEnterPin()`      | Detects and enters your bank PIN if the PIN dialog appears.                      |
-| `AURAS.extensionLogic()`     | Chooses and performs a long or short extension based on available Vis.           |
-| `AURAS.activateLoop()`       | Attempts to activate an aura up to three times, verifying on the buff bar.       |
-| `AURAS.performReset()`       | Executes generic, tiered, or premier resets for recharging auras.                |
-| `AURAS.manageAura(rawInput)` | Core logic: opens interfaces, selects aura, checks status, and activates/resets. |
-| `AURAS.activateAura(name)`   | External entry point to manage and activate any aura by name.                    |
+| Function                             | Description                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `AURAS.verifyAuras()`                | Ensures every aura mapping’s `id` matches its `addr` (hex) value.                    |
+| `AURAS.openEquipment()`              | Opens the equipment interface tab.                                                   |
+| `AURAS.isEquipmentOpen()`            | Returns `true` if the equipment tab is currently open.                               |
+| `AURAS.openAuraWindow()`             | Opens the aura management window from the equipment tab.                             |
+| `AURAS.isAuraManagementOpen()`       | Returns `true` if the aura management interface is currently displayed.              |
+| `AURAS.selectAura(name)`             | Selects the specified aura by name in the management window.                         |
+| `AURAS.parseVisCost(raw)`            | Parses a string like `"1.2M"` or `"350K"` into a numeric Vis cost (e.g. 1200000).    |
+| `AURAS.parseAvailableVis()`          | Reads and returns the available Vis displayed in the aura interface.                 |
+| `AURAS.getResetCounts()`             | Scans the interface and returns counts of generic and tiered resets in a table.      |
+| `AURAS.getAuraResetCount(name)`      | Determines how many resets (generic, tiered, or premier) are available for an aura.  |
+| `AURAS.maybeEnterPin()`              | Detects a bank PIN prompt and automatically enters your configured PIN.              |
+| `AURAS.pin(bankPin)`                 | Sets your bank PIN (`yourbankpin`) for use in PIN entry operations.                  |
+| `AURAS.extensionLogic()`             | Chooses and performs a long or short aura extension based on available Vis.          |
+| `AURAS.activateLoop()`               | Attempts to activate an aura up to three times, verifying success on the buff bar.   |
+| `AURAS.performReset(name, count, t)` | Executes a generic, tiered, or premier reset to recharge an aura.                    |
+| `AURAS.deactivateAura()`             | Deactivates the currently active aura, confirming any dialog as needed.              |
+| `AURAS.manageAura(rawInput)`         | Core workflow: opens interfaces, selects aura, checks status, then activates/resets. |
+| `AURAS.activateAura(name)`           | Public entry point to manage and activate any aura by name.                          |
+| `AURAS.auraTimeRemaining()`          | Returns the remaining duration (in seconds) of the currently active aura.            |
+| `AURAS.noResets` *(variable)*        | Boolean flag set to `true` when no valid resets remain for the current aura.         |
+| `AURAS.auraRefreshTime` *(variable)* | Threshold (in seconds) for how early to attempt an aura refresh when enabled.        |
 
 ## Contributing
 
