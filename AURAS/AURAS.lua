@@ -1,18 +1,33 @@
 --[[
-    AURAS.lua
+    AURAS.lua [1.01]
 	Last update: 06/27/25 by <@600408294003048450>
-        * Removed decToHex() 
+        * add AURAS.isEquipmentOpen() 			(function)
+	* add AURAS.isAuraManagementOpen() 		(function)
+	* add AURAS.deactivateAura() 			(function)
+	* add checks for AURAS.noResets 		(variable)
+	* add AURAS.auraTimeRemaining() 		(function)
+	* add passing bankpin via AURAS.pin(bankPin) 	(function)
+	* add AURAS.auraRefreshTime 			(variable)
 ]]
 
 local AURAS = {}
 local API   = require("api")
+AURAS.noResets = false
 AURAS.yourbankpin  = 0000
+AURAS.refreshEarly = false
+
+if AURAS.refreshEarly then
+    AURAS.auraRefreshTime = math.random(15, 120)
+else
+    AURAS.auraRefreshTime = 0
+end
 
 API.Write_fake_mouse_do(false)
 
 -- to add auraActions, find aura ID.. ex 22300 for penance
 -- convert 22300 decimal to hex -> addr = 571C (verify in table penance addr == 0x571c)
 -- add more mappings as needed
+
 AURAS.auraActions = {
     oddball                 = {row=0,  addr=0x51dd, id=20957, resetTypes={1}},
     ["friend in need"]      = {row=2,  addr=0x51e3, id=20963, resetTypes={1}},
@@ -171,13 +186,17 @@ function AURAS.verifyAuras(auraDefs)
     return mismatches
 end
 
+function AURAS.isEquipmentOpen()
+	return API.VB_FindPSettinOrder(3074).state == 1
+end
+
 function AURAS.openEquipment()
     for i = 1, 3 do
-        if API.VB_FindPSettinOrder(3074).state == 1 then
-            print("[AURA] Equipment tab open")
-            return true
-        end
-        print(string.format("[AURA] Opening Equipment tab (try %d)", i))
+	if AURAS.isEquipmentOpen() then
+		print(string.format("[AURA] Equipment tab opened on try %d", i))
+		return true
+	end
+	print(string.format("[AURA] Opening Equipment tab (try %d)", i))
         API.DoAction_Interface(0xc2, 0xffffffff, 1, 1431, 0, 10, API.OFF_ACT_GeneralInterface_route)
         API.RandomSleep2(math.random(600,1800), 400, 200)
     end
@@ -189,22 +208,25 @@ function AURAS.isAuraActive()
     return API.VB_FindPSettinOrder(1230).state == 8192
 end
 
-function AURAS.openAuraWindow()
+function AURAS.isAuraManagementOpen()
     local inter = {{1929,0,-1,0},{1929,2,-1,0},{1929,2,14,0}}
+    local iface = API.ScanForInterfaceTest2Get(false, inter)[1]
+    return iface.textids == "Aura Management"
+end
+
+function AURAS.openAuraWindow()
     for i = 1, 3 do
-        local iface = API.ScanForInterfaceTest2Get(false, inter)[1]
-        if iface.textids == "Aura Management" then
-            print("[AURA] Aura Management open")
-            return true
-        end
-        print(string.format("[AURA] Opening Aura Management (try %d)", i))
+	if AURAS.isAuraManagementOpen() then
+		print(string.format("[AURA] Aura Management opened on try %d", i))
+		return true
+	end
+	print(string.format("[AURA] Opening Aura Management (try %d)", i))
         if API.VB_FindPSettinOrder(1230).state == 0 then
             API.DoAction_Interface(0xffffffff, 0xffffffff, 1, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         elseif AURAS.isAuraActive() then
-            local equippedId = API.GetEquipSlot(11).itemid1
-            API.DoAction_Interface(0xffffffff, equippedId, 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
+            API.DoAction_Interface(0xffffffff, API.GetEquipSlot(11).itemid1, 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         end
-        API.RandomSleep2(math.random(1200,2400), 200, 200)
+        API.RandomSleep2(math.random(1200, 2400), 200, 200)
     end
     error("[ERROR] Unable to open Aura Management")
     return false
@@ -223,15 +245,7 @@ function AURAS.selectAura(auraName)
             return true
         end
         print(string.format("[AURA] Selecting '%s' (try %d)", auraName, i))
-        API.DoAction_Interface(
-            0xffffffff,
-            mapping.addr,
-            1,
-            1929,
-            95,
-            mapping.row,
-            API.OFF_ACT_GeneralInterface_route
-        )
+        API.DoAction_Interface(0xffffffff,mapping.addr,1,1929,95,mapping.row,API.OFF_ACT_GeneralInterface_route)
         API.RandomSleep2(math.random(1200,2400), 200, 200)
     end
     error(string.format("[ERROR] Unable to select '%s'", auraName))
@@ -304,7 +318,7 @@ function AURAS.getAuraResetCount(auraName, useGeneric)
     print("[DEBUG] getAuraResetCount for", auraName)
     print("[DEBUG]  resetTypes:", action and (table.concat(action.resetTypes or {}, ",")) or "<no mapping>")
     print(string.format(
-        "[DEBUG]  counts: generic=%d t1=%d t2=%d t3=%d t4=%d",
+        "[DEBUG]  counts: generic=%d, t1=%d, t2=%d, t3=%d, t4=%d",
         counts.genericResets, counts.tier1Resets, counts.tier2Resets, counts.tier3Resets, counts.tier4Resets
     ))
 
@@ -317,7 +331,7 @@ function AURAS.getAuraResetCount(auraName, useGeneric)
         table.sort(tiers)
         for _, t in ipairs(tiers) do
             local cnt = counts["tier" .. t .. "Resets"] or 0
-            print(string.format("[DEBUG]  checking tier %d => %d resets", t, cnt))
+            print(string.format("[DEBUG]  checking tier %d -> %d resets", t, cnt))
             if cnt > 0 then
                 return cnt, t
             end
@@ -331,7 +345,7 @@ function AURAS.getAuraResetCount(auraName, useGeneric)
         end
     end
 
-    print("[DEBUG]  No resets found for:", auraName)
+    print("[DEBUG] No resets found for: ", auraName)
     return 0, nil
 end
 
@@ -343,7 +357,7 @@ function AURAS.maybeEnterPin()
 
         local s = API.VB_FindPSettinOrder(2874).state
         if s == 12 or s == 18 then
-            error("[PIN] - PIN window still present after one try or wrong pin")
+            error("[PIN] - PIN window still present after one try / wrong pin")
             return false
         end
         print("[PIN] PIN entered successfully")
@@ -405,7 +419,7 @@ function AURAS.activateLoop()
             return true
         end
     end
-    error("[ERROR] Aura failed to activate after 3 attempts")
+    print("[ERROR] Aura failed to activate after 3 attempts")
     return false
 end
 
@@ -458,7 +472,35 @@ function AURAS.performReset(auraName, resets, resetType)
     return false
 end
 
+function AURAS.deactivateAura()
+    for i = 1, 3 do
+        print(string.format("[AURA] Deactivation attempt %d...", i))
+	API.RandomSleep2(math.random(600,1800),200,200)
+	API.DoAction_Interface(0x24,0xffffffff,1,1929,16,-1,API.OFF_ACT_GeneralInterface_route)
+	API.RandomSleep2(math.random(1200,2400),200,200)
+
+	local state = API.VB_FindPSettinOrder(2874).state
+        print(string.format("[DEBUG] VB_FindPSettinOrder(2874).state = %s", tostring(state)))
+	
+        if state == 12 then
+            print("[DEBUG] Confirmation dialog detected -> confirming deactivate")
+	    API.DoAction_Interface(0xffffffff,0xffffffff,0,1188,8,-1,API.OFF_ACT_GeneralInterface_Choose_option)
+	    API.RandomSleep2(math.random(1200,2400),200,200)
+      	    print("[DEBUG] performDeactivate -> successful")
+        end
+	
+        local buff = API.Buffbar_GetIDstatus(26098, false)
+        if not buff.found and not AURAS.isAuraActive() then
+            print(string.format("[AURA] Aura deactivated on attempt %d", i))
+            return true
+        end
+    end
+    print("[DEBUG] Aura failed to deactivate after 3 attempts")
+    return false
+end
+
 function AURAS.manageAura(rawInput)
+
     local bad = AURAS.verifyAuras(AURAS.auraActions)
     if #bad > 0 then
         error("Found mismatched auras: " .. table.concat(bad, ", "))
@@ -472,11 +514,23 @@ function AURAS.manageAura(rawInput)
     local mapping = AURAS.auraActions[auraName]
     if not mapping then
         error(string.format("[ERROR] No mapping for aura '%s'", auraName))
+	return false
     end
 
-    if not AURAS.openEquipment() then return false end
-    if not AURAS.openAuraWindow() then return false end
-    if not AURAS.selectAura(auraName) then return false end
+    if not AURAS.openEquipment() then 
+	error("[ERROR] - Failed to open the equipment tab")
+	return false 
+    end
+
+    if not AURAS.openAuraWindow() then
+	error("[ERROR] - Failed to open the aura management tab") 
+        return false 
+    end
+
+    if not AURAS.selectAura(auraName) then 
+	error("[ERROR] - Failed to select the correct aura")
+        return false 
+    end
 
     local counts = AURAS.getResetCounts()
 
@@ -487,9 +541,16 @@ function AURAS.manageAura(rawInput)
     }
     local ownedStatus = API.ScanForInterfaceTest2Get(false, ownedBox)[1].textids
     print(string.format("[AURA] Owned status: %s", ownedStatus))
+
     if ownedStatus == "Buy" then
         error(string.format("[AURA] '%s' not available to use -> aborting", auraName))
         return false
+
+    elseif ownedStatus == "Deactivate" then
+        if not AURAS.deactivateAura() then
+		error(string.format("[ERROR] '%s': failed to deactivate", auraName))
+		return false
+	end
     end
 
     local interStatus = {{1929,0,-1,0},{1929,3,-1,0},{1929,4,-1,0},{1929,74,-1,0}}
@@ -512,40 +573,64 @@ function AURAS.manageAura(rawInput)
                 AURAS.extensionLogic()
                 return AURAS.activateLoop()
             else
-                print("[DEBUG] - Failed to reset aura")
+                error("[DEBUG] - Failed to reset aura")
                 return false
             end
         else
+	    AURAS.noResets = true
             print("[DEBUG] - No valid resets for aura: " .. auraName)
-            return false
+            return true
         end
 
     else
-        error(string.format("[AURA] Unhandled status '%s'", status))
+        error(string.format("[ERROR] Unhandled status '%s'", status))
         return false
     end
 end
 
 function AURAS.activateAura(auraName)
-    print(string.format("[AURA] Starting activation for aura '%s'", auraName))
-    local ok = AURAS.manageAura(auraName)
-    print(string.format("[AURA] manageAura returned: %s", tostring(ok)))
+    if not AURAS.noResets then
 
-    if ok then
-        print("[AURA] Attempting to close interface...")
+    	print(string.format("[AURA] Starting activation for aura '%s'", auraName))
+    	local ok = AURAS.manageAura(auraName)
+    	print(string.format("[AURA] manageAura returned: %s", tostring(ok)))
+
+	if ok then
+		print(string.format("[DEBUG] manageAura success for '%s'", auraName))
+		if AURAS.refreshEarly then
+			AURAS.auraRefreshTime = math.random(15, 120)	-- reset the time to refresh the aura
+		end
+    	else
+        	print(string.format("[DEBUG] manageAura failed for '%s', aborting activation.", auraName))
+		API.Write_LoopyLoop(false) -- issue detected
+    	end
+    else
+	print("[DEBUG] - No valid resets found for: ".. auraName)
+    end
+
+    if AURAS.isAuraManagementOpen() then
+	print("[AURA] Attempting to close interface...")
         local closed = API.DoAction_Interface(0x24, 0xffffffff, 1, 1929, 167, -1, API.OFF_ACT_GeneralInterface_route)
         print(string.format("[AURA] Close aura interface returned: %s", tostring(closed)))
         if closed then
-            API.RandomSleep2(math.random(1200,2400), 200, 200)
-            print("[DEBUG] Interface closed and delay complete")
-        else
-            print("[ERROR] Failed to close interface after activation")
-            API.Write_LoopyLoop(false)
+        	API.RandomSleep2(math.random(1200,2400), 200, 200)
+            	print("[DEBUG] Aura interface closed and delay complete")
+       	else
+            	print("[ERROR] Failed to close aura management interface")
+            	API.Write_LoopyLoop(false)
         end
-    else
-        print(string.format("[DEBUG] manageAura failed for '%s', aborting activation.", auraName))
-        API.Write_LoopyLoop(false)
     end
+end
+
+function AURAS.auraTimeRemaining()
+    local status = API.Buffbar_GetIDstatus(26098, false)
+    local found  = status and status.found
+    return found and API.Bbar_ConvToSeconds(status) or 0
+end
+
+function AURAS.pin(bankPin)
+    AURAS.yourbankpin = bankPin
+    return AURAS
 end
 
 return AURAS
