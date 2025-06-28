@@ -42,21 +42,15 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
 
 1. Copy `AURAS.lua` into your project directory.
 
-2. Require the module in your Lua script:
+2. Require the module in your Lua script and set your bank pin:
 
    ```lua
    local AURAS = require("AURAS").pin(0000)	-- enter your bank pin
    ```
 
 ## Configuration
-
-1. **Bank PIN** — Set your bank PIN to allow automatic PIN entry when extending auras:
-
-   ```lua
-   local aura     		= require("AURAS").pin(0000)	-- require AURAS library & enter your bank pin
-   ```
    
-2. **Add Custom Auras** — To add your own aura mappings, convert the aura's ID from decimal to hex and add it to the `AURAS.auraActions` table:
+1. **Add Custom Auras** — To add your own aura mappings, convert the aura's ID from decimal to hex and add it to the `AURAS.auraActions` table:
 
    ```lua
    -- Example: Add "myAura" with decimal ID 30000
@@ -64,6 +58,12 @@ Download the latest ME build: [Build\_DLL.7z](https://discord.com/channels/80982
    local hexAddr = 0x7530  -- convert decimal value to hex
    AURAS.auraActions.myAura = { row=120, addr=hexAddr, id=decimalId, resetTypes={1,2} }
    ```
+
+2. Optionally refresh auras early (in AURAS.lua)
+    ```lua
+    AURAS.refreshEarly = false --(change to true)
+    AURAS.auraRefreshTime = math.random(15, 120) -- refresh at 15 - 120 seconds
+    ```
 
 ## Usage
 
