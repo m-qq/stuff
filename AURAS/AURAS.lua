@@ -221,7 +221,7 @@ function AURAS.openAuraWindow()
 		return true
 	end
 	print(string.format("[AURA] Opening Aura Management (try %d)", i))
-        if API.VB_FindPSettinOrder(1230).state == 0 then
+        if API.VB_FindPSettinOrder(1230).state == 0 or API.VB_FindPSettinOrder(1230).state == -1 then
             API.DoAction_Interface(0xffffffff, 0xffffffff, 1, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         elseif AURAS.isAuraActive() then
             API.DoAction_Interface(0xffffffff, API.GetEquipSlot(11).itemid1, 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
