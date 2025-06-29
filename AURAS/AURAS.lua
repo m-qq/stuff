@@ -604,8 +604,8 @@ function AURAS.activateAura(auraName)
         	print(string.format("[DEBUG] manageAura failed for '%s', aborting activation.", auraName))
 		API.Write_LoopyLoop(false) -- issue detected
     	end
-    else
-	print("[DEBUG] - No valid resets found for: ".. auraName)
+    --else
+    --	print("[DEBUG] - No valid resets found for: ".. auraName)
     end
 
     if AURAS.isAuraManagementOpen() then
