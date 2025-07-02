@@ -1,219 +1,171 @@
-local API			= require("api")
-local AURAS 			= require("swarm.AURAS").pin(0000)	-- require AURAS library & enter your bank pin
-local version			= "1.0"
+local API = require("api")
+--local AURAS = require("swarm.AURAS")
+local version = "1.1"
 
----------------------------------------------------------------------
--- SETUP / CONFIG ---------------------------------------------------
----------------------------------------------------------------------
-local whichAura			= "legendary call of the sea"	-- enter the desired aura
-local fishingAction         	= "swarm"       		-- set your main fishing target here 
-								-- "sailfish", "minnows", "frenzyS", "frenzyN" 
-								-- "swarm", "bluejellyfish", "greenjellyfish"
+-- ═════════════════════════════════════════════════════
+--                    SCRIPT CONFIGURATION                    
+-- ═════════════════════════════════════════════════════
 
--- levels for bluejellyfish 91, greenjellyfish 68, swarm 68, minnows 68, frenzyN 94, frenzyS 94, sailfish 97
+local fishingAction = "frenzyS"   		-- Available options: "sailfish", "minnows", "frenzyS", "frenzyN", "swarm", "bluejellyfish", "greenjellyfish"               
 
-usePorters	    	    	= true				-- can use inventory porters if no GOTE, must be true if useGOTE 
-useGOTE                     	= false    			-- use grace of the elves porters
+local whichAura = ""  				-- Aura to maintain (leave "" to disable or enter the exact aura and uncomment AURAS above)
 
-local watchRandoms          	= true          		-- handle fishing notes/tangled fishbowl/etc
-local MIN_IDLE_TIME_MINUTES 	= 5				-- min minutes before anti idle action
-local MAX_IDLE_TIME_MINUTES 	= 15				-- max minutes before anti idle action	
-local alertItemLevel        	= 10            		-- alert on augmented item level reached (use auto siphons)
-								-- alertItemLevel taken out in 1.0
+local bankPin = 0000
 
-API.Write_fake_mouse_do(false)
+local usePorters = true                         -- Use inventory porters for banking
+local useGOTE = false                           -- Use Grace of the Elves (requires usePorters = true)
 
----------------------------------------------------------------------
--- DEFINITIONS ------------------------------------------------------
----------------------------------------------------------------------
+local watchRandoms = true                       -- Auto-handle fishing notes, bottles, etc.
+local MIN_IDLE_TIME_MINUTES = 5                 -- Minimum minutes before anti-idle action
+local MAX_IDLE_TIME_MINUTES = 15                -- Maximum minutes before anti-idle action
 
--- not all fish types are tested! (lower level swarm fish i.e. shrimp, herring..text values may not be exactly matching)
+local alertItemLevel = 10                       -- Alert when augmented item reaches this level
+
+-- ═════════════════════════════════════════════════════
+--                      CORE DATA STRUCTURES                     
+-- ═════════════════════════════════════════════════════
+
 local FISH_TYPES = {
-    {"rocktail",         "Rocktails",          "rocktail",                15270},
-    {"cavefish",         "Cavefish",           "cavefish",                15264},
-    {"bluejelly",        "Blue Blubbers",      "blue blubber jellyfish",  42265},
-    {"sailfish",         "Sailfish",           "sailfish",                42249},
-    {"mantaray",         "Manta rays",         "manta ray",               389	},
-    {"seaturtle",        "Sea turtles",        "sea turtle",              395	},
-    {"greatwhiteshark",  "Great white sharks", "great white shark",       34727},
-    {"baronshark",       "Baron sharks",       "baron shark"			},
-    {"greenblubber",     "Green Blubbers",     "green blubber jellyfish", 42256},
-    {"minnow",           "Minnows",            "magnetic minnow"		},
-    {"monkfish",         "Monkfish",           "monkfish",                7944	},
-    {"swordfish",        "Swordfish",          "swordfish",               371	},
-    {"bass",             "Bass",               "bass",                    363	},
-    {"tuna",             "Tuna",               "tuna",                    359	},
-    {"cod",              "Cod",                "cod",                     341	},
-    {"mackerel",         "Mackerel",           "mackerel",                353	},
-    {"trout",            "Trout",              "trout",                   335	},
-    {"herring",          "Herring",            "herring",                 345	},
-    {"shrimp",           "Shrimp",             "shrimp",                  317	},
+    {"rocktail","Rocktails","rocktail",15270}, {"cavefish","Cavefish","cavefish",15264},
+    {"bluejelly","Blue Blubbers","blue blubber jellyfish",42265}, {"sailfish","Sailfish","sailfish",42249},
+    {"mantaray","Manta rays","manta ray",389}, {"seaturtle","Sea turtles","sea turtle",395},
+    {"greatwhiteshark","Great white sharks","great white shark",34727}, {"baronshark","Baron sharks","baron shark"},
+    {"greenblubber","Green Blubbers","green blubber jellyfish",42256}, {"minnow","Minnows","magnetic minnow"},
+    {"monkfish","Monkfish","monkfish",7944}, {"swordfish","Swordfish","swordfish",371},
+    {"bass","Bass","bass",363}, {"tuna","Tuna","tuna",359}, {"cod","Cod","cod",341},
+    {"mackerel","Mackerel","mackerel",353}, {"trout","Trout","trout",335},
+    {"herring","Herring","herring",345}, {"shrimp","Shrimp","shrimp",317}
 }
 
-local validActions = {
-    sailfish        = true,
-    minnows         = true,
-    frenzyS         = true,
-    frenzyN         = true,
-    swarm           = true,
-    bluejellyfish   = true,
-    greenjellyfish  = true,
+local porterCharges = {
+    [29276]=5,[29275]=5, [29278]=10,[29277]=10, [29280]=15,[29279]=15,
+    [29282]=20,[29281]=20, [29284]=25,[29283]=25, [29286]=30,[29285]=30,
+    [51491]=50,[51490]=50
 }
 
-if not validActions[fishingAction] then
-    error(("Invalid fishingAction '%s'; must be one of: %s")
-        :format(
-            fishingAction,
-            table.concat(
-                {"sailfish","minnows","frenzyS","frenzyN","swarm","bluejellyfish","greenjellyfish"},
-                ", "
-            )
-        )
-    )
-end
-
-local levelRequirements = {
-    bluejellyfish 	= 91,
-    greenjellyfish 	= 68,
-    swarm         	= 68,
-    minnows       	= 68,
-    frenzyN       	= 94,
-    frenzyS       	= 94,
-    sailfish      	= 97,
+local RANDOM_EVENTS = {
+    {42286,"Fishing notes detected"," + Gained extra xp from consuming fishing notes"},
+    {42285,"Tangled fishbowl detected"," + 5% xp boost activated for 3 minutes"},
+    {42284,"Broken fishing rod detected"," + 10% catch rate boost activated for 3 minutes"},
+    {42283,"Barrel of bait detected"," + 10% additional catch boost for 3 minutes"},
+    {42282,"Message in a bottle detected"," + Message in a bottle consumed"}
 }
+
+local AREAS = {
+    sailfish={2135,7124,2149,7136}, minnows={2127,7085,2141,7101},
+    frenzyS={2062,7108,2073,7112}, frenzyN={2064,7121,2074,7131},
+    swarm={2090,7075,2103,7079}, jellyfish={2083,7109,2114,7145},
+    bluejellyfish={2083,7109,2114,7145}, greenjellyfish={2083,7109,2114,7145},
+    minJunc={2116,7113,2122,7118}, midJunc={2097,7108,2103,7113}, southJunc={2102,7100,2106,7105},
+    bankPorterEnter={2132,7103,2135,7110}, bankPorterJelly={2096,7111,2103,7116},
+    netJelly={2096,7089,2102,7094}, netEnter={2114,7121,2122,7125}
+}
+
+local npcIds = {
+    sailfish={25222,25221}, minnows={25219}, swarm={25220},
+    jellyfish={25224,25223}, bluejellyfish={25224}, greenjellyfish={25223},
+    frenzyS={25204,25202,25195,25194,25201,25203,25196,25197,25197,25198,25205,25199,25208,25207,25200,25209,25206},
+    frenzyN={25204,25202,25195,25194,25201,25203,25196,25197,25197,25198,25205,25199,25208,25207,25200,25209,25206}
+}
+
+local edges = {
+    sailfish={"netEnter","minJunc","bankPorterEnter"}, minnows={"bankPorterEnter"},
+    frenzyS={"midJunc"}, frenzyN={"midJunc"}, jellyfish={"midJunc"}, swarm={"netJelly"},
+    minJunc={"sailfish","minnows","midJunc","bankPorterEnter","netEnter"},
+    midJunc={"jellyfish","southJunc","frenzyN","frenzyS","minJunc","bankPorterJelly","netJelly"},
+    southJunc={"midJunc","swarm"},
+    bankPorterEnter={"minJunc","minnows","sailfish"}, bankPorterJelly={"midJunc"},
+    netJelly={"swarm","midJunc"}, netEnter={"minJunc","sailfish"}
+}
+
+local BANKING_REGIONS = {
+    sailfish={porter="bankPorterEnter",net="netEnter"}, minnows={porter="bankPorterEnter",net="netEnter"},
+    swarm={porter="bankPorterJelly",net="netJelly"}, jellyfish={porter="bankPorterJelly",net="netJelly"},
+    frenzyS={porter="bankPorterJelly",net="netJelly"}, frenzyN={porter="bankPorterJelly",net="netJelly"}
+}
+
+local DEPOSIT_CONFIGS = {
+    bankPorterEnter={id=110591,action={porter=0x33,net=0x3c},route={porter=API.OFF_ACT_GeneralObject_route2,net=API.OFF_ACT_GeneralObject_route3}},
+    bankPorterJelly={id=110860,action={porter=0x33,net=0x3c},route={porter=API.OFF_ACT_GeneralObject_route3,net=API.GeneralObject_route_useon}},
+    netJelly={id=110857,action={net=0x29},route={net=API.OFF_ACT_GeneralObject_route2}},
+    netEnter={id=110857,action={net=0x29},route={net=API.OFF_ACT_GeneralObject_route2}}
+}
+
+local xpTable = {0,1160,2607,5176,8286,11760,15835,21152,28761,40120, 57095,81960,117397,166496,232755,320080,432785,575592,753631,972440}
+local ALL_PORTERS = {29276,29278,29280,29282,29284,29286,51491,29275,29277,29279,29281,29283,29285,51490}
+local ACTIVITY_TYPES = {frenzyS="frenzy", frenzyN="frenzy", minnows="minnows", default="regular"}
+local validActions = {sailfish=true, minnows=true, frenzyS=true, frenzyN=true, swarm=true, bluejellyfish=true, greenjellyfish=true}
+local levelRequirements = {sailfish=97, minnows=68, frenzyS=94, frenzyN=94, swarm=68, bluejellyfish=91, greenjellyfish=68}
+
+-- ═════════════════════════════════════════════════════
+--                   VARIABLES                     
+-- ═════════════════════════════════════════════════════
 
 local prices = {}
 for _, f in ipairs(FISH_TYPES) do
     local id = f[4]
-    if id then
-        prices[id] = API.GetExchangePrice(id) or 0
-    end
+    if id then prices[id] = API.GetExchangePrice(id) or 0 end
 end
 
-local npcIds = {
-    sailfish       = { 25222, 25221 },         
-    minnows        = { 25219 },
-    frenzyS        = { 25204, 25202, 25195, 25194, 25201, 25203, 25196, 25197, 25197, 25198, 25205, 25199, 25208, 25207, 25200, 25209, 25206 },
-    frenzyN        = { 25204, 25202, 25195, 25194, 25201, 25203, 25196, 25197, 25197, 25198, 25205, 25199, 25208, 25207, 25200, 25209, 25206 },
-    swarm          = { 25220 },            
-    jellyfish      = { 25224, 25223 },            
-    bluejellyfish  = { 25224 },           
-    greenjellyfish = { 25223 },       
-}
+local regions, nodes = {}, {}
+for name, coords in pairs(AREAS) do
+    local x1, y1, x2, y2 = coords[1], coords[2], coords[3], coords[4]
+    regions[name] = {p1=WPOINT.new(x1,y1,0), p2=WPOINT.new(x2,y2,3)}
+    nodes[name] = {xMin=x1, xMax=x2, yMin=y1, yMax=y2}
+end
 
-local xpTable = {   
-    0,		1160,		2607,		5176, 		8286, 
-    11760,	15835,		21152,		28761,		40120,
-    57095,	81960,		117397,		166496,		232755,
-    320080,	432785,		575592,		753631,		972440
-}
-
-local regions = {
-    sailfish       = {p1 = WPOINT.new(2135,7124,0),  p2 = WPOINT.new(2149,7136,3)},
-    minnows        = {p1 = WPOINT.new(2127,7085,0),  p2 = WPOINT.new(2141,7101,3)}, 
-    frenzyS        = {p1 = WPOINT.new(2062,7108,0),  p2 = WPOINT.new(2073,7112,3)},
-    frenzyN        = {p1 = WPOINT.new(2064,7121,0),  p2 = WPOINT.new(2074,7131,3)}, 
-    swarm          = {p1 = WPOINT.new(2090,7075,0),  p2 = WPOINT.new(2103,7079,3)},  
-    jellyfish      = {p1 = WPOINT.new(2083,7109,0),  p2 = WPOINT.new(2114,7145,3)}, 
-    bluejellyfish  = {p1 = WPOINT.new(2083,7109,0),  p2 = WPOINT.new(2114,7145,3)},
-    greenjellyfish = {p1 = WPOINT.new(2083,7109,0),  p2 = WPOINT.new(2114,7145,3)}, 
-    
-    -- Junction regions
-    minJunc        = {p1 = WPOINT.new(2116,7113,0),  p2 = WPOINT.new(2122,7118,3)},
-    midJunc        = {p1 = WPOINT.new(2097,7108,0),  p2 = WPOINT.new(2103,7113,3)},
-    southJunc      = {p1 = WPOINT.new(2102,7100,0),  p2 = WPOINT.new(2106,7105,3)},
-    
-    -- Bank/Net regions
-    bankPorterEnter    = {p1 = WPOINT.new(2132,7103,0),  p2 = WPOINT.new(2135,7110,3)},
-    bankPorterJelly    = {p1 = WPOINT.new(2096,7111,0),  p2 = WPOINT.new(2103,7116,3)}, 
-    netJelly           = {p1 = WPOINT.new(2096,7089,0),  p2 = WPOINT.new(2102,7094,3)}, 
-    netEnter           = {p1 = WPOINT.new(2114,7121,0),  p2 = WPOINT.new(2122,7125,3)}, 
-}
-
-local RANDOM_EVENTS = {
-    {42286, "Fishing notes detected",        " + Gained extra xp from consuming fishing notes"},
-    {42285, "Tangled fishbowl detected",     " + 5% xp boost activated for 3 minutes"},
-    {42284, "Broken fishing rod detected",   " + 10% catch rate boost activated for 3 minutes"},
-    {42283, "Barrel of bait detected",       " + 10% additional catch boost for 3 minutes"},
-    {42282, "Message in a bottle detected",  " + Message in a bottle consumed"} 		-- pick 1 of 3 options
-}
-
-local edges = {
-    -- Fishing spots
-    sailfish   = {"netEnter", "minJunc", "bankPorterEnter"},
-    minnows    = {"bankPorterEnter"},
-    frenzyS    = {"midJunc"},
-    frenzyN    = {"midJunc"},
-    jellyfish  = {"midJunc"},       
-    swarm      = {"netJelly"},     
-    
-    -- Junction connections  
-    minJunc    = {"sailfish", "minnows", "midJunc", "bankPorterEnter", "netEnter"},
-    midJunc    = {"jellyfish", "southJunc", "frenzyN", "frenzyS", "minJunc", "bankPorterJelly", "netJelly"},
-    southJunc  = {"midJunc", "swarm"},
-    
-    -- Bank/Net connections
-    bankPorterEnter  = {"minJunc", "minnows", "sailfish"},
-    bankPorterJelly  = {"midJunc"},
-    netJelly         = {"swarm", "midJunc"},
-    netEnter         = {"minJunc", "sailfish"},
-}
-
-local porterCharges = {
-    -- Tier 1 
-    [29276] = 5,  -- Active 
-    [29275] = 5,  -- Inactive 
-    
-    -- Tier 2
-    [29278] = 10,  -- Active 
-    [29277] = 10,  -- Inactive 
-    
-    -- Tier 3 
-    [29280] = 15,  -- Active 
-    [29279] = 15,  -- Inactive
-    
-    -- Tier 4
-    [29282] = 20,  -- Active 
-    [29281] = 20,  -- Inactive 
-    
-    -- Tier 5
-    [29284] = 25,  -- Active
-    [29283] = 25,  -- Inactive 
-    
-    -- Tier 6
-    [29286] = 30,  -- Active
-    [29285] = 30,  -- Inactive
-    
-    -- Tier 7
-    [51491] = 50,  -- Active
-    [51490] = 50,  -- Inactive
-}
-
-startingInventory 		= {}
-local afk 			= API.ScriptRuntime()
-local randomTime 		= 0
-local lastFishCaught 		= API.ScriptRuntime()
-local lastKnownFishCount 	= 0
-local frenzyInteractions 	= 0
+startingInventory = {}
+afk = API.ScriptRuntime()
+randomTime = 0
+lastIdleXp = API.GetSkillXP("FISHING")
+lastFishTime = API.ScriptRuntime()
+local fishCounts, prevFishCounts = {}, {}
+local totalFish, lastChatCount = 0, 0
+local lastFishCaught = API.ScriptRuntime()
+local lastKnownFishCount = 0
+local frenzyInteractions = 0
 local waitingForFrenzyCompletion = false
-local lastKnownMinnowCount 	= 0
-local minnowInteractions	= 0
-local lastFishTime 		= API.ScriptRuntime()    	-- initialize to script start
-local currentGOTEThreshold 	= 0				-- dont change
-local lastPorterInventoryState 	= ""
+local lastKnownMinnowCount = 0
+local minnowInteractions = 0
+local unpack = unpack or table.unpack
+
+for _, f in ipairs(FISH_TYPES) do
+    fishCounts[f[1]] = 0
+    prevFishCounts[f[1]] = 0
+end
+
+local currentGOTEThreshold = 0
+local lastPorterInventoryState = ""
 local portersUsed = 0
 local lastPorterBuffAmount = 0
 local buffTrackingInitialized = false
 
----------------------------------------------------------------------
--- LEVEL 1: BASIC UTILITY FUNCTIONS (NO DEPENDENCIES) ---------------
----------------------------------------------------------------------
+local startXp = API.GetSkillXP("FISHING")
+local lastDisplayedValues = {
+    totalFish = 0, xpGained = 0, gpEarned = 0, porterCharges = 0,
+    porterCount = 0, totalCharges = 0, portersUsed = 0, inventorySpaces = 0,
+    playerAnim = 0, playerMoving = false, currentRegion = "", playerX = 0, playerY = 0,
+    inventoryHash = "", timeSinceActionSeconds = 0, timeSinceFishSeconds = 0,
+    auraTimeMinutes = 0, runtimeMinutes = 0
+}
+local configurationDisplayed = false
+local lastConfigState = ""
+
+local pathQueue, visitedNodes, validEdges = {}, {}, {}
+
+local normalizedAction = nil  
+local isFrenzyAction = false  
+local actionClean = nil       
+
+API.SetDrawLogs(true)
+API.SetDrawTrackedSkills(true)
+
+-- ═════════════════════════════════════════════════════
+--                     UTILITY FUNCTIONS                      
+-- ═════════════════════════════════════════════════════
 
 local function normalizeFishName(name)
-  if name=="bluejellyfish" or name=="greenjellyfish" then
-    return "jellyfish"
-  end
-  return name
+    return (name == "bluejellyfish" or name == "greenjellyfish") and "jellyfish" or name
 end
 
 local function activityUsesPorters()
@@ -224,106 +176,45 @@ end
 local function randomPointInRegion(r)
     local x1, x2 = math.min(r.p1.x, r.p2.x), math.max(r.p1.x, r.p2.x)
     local y1, y2 = math.min(r.p1.y, r.p2.y), math.max(r.p1.y, r.p2.y)
-    
-    local x = math.floor(x1 + math.random() * (x2 - x1) + 0.5)
-    local y = math.floor(y1 + math.random() * (y2 - y1) + 0.5)
-    
-    return { x = x, y = y, z = 0 }  
+    return {
+        x = math.floor(x1 + math.random() * (x2 - x1) + 0.5),
+        y = math.floor(y1 + math.random() * (y2 - y1) + 0.5),
+        z = 0
+    }
 end
 
-local function dist2(a,b)
-  return math.sqrt((a.x-b.x)^2 + (a.y-b.y)^2)
+local function dist2(a, b)
+    return math.sqrt((a.x - b.x)^2 + (a.y - b.y)^2)
 end
 
-local function inside(x,y,box,z)
-  local x1,x2 = math.min(box.p1.x,box.p2.x), math.max(box.p1.x,box.p2.x)
-  local y1,y2 = math.min(box.p1.y,box.p2.y), math.max(box.p1.y,box.p2.y)
-  local z1,z2 = math.min(box.p1.z or 0, box.p2.z or 3), math.max(box.p1.z or 0, box.p2.z or 3)
-  
-  z = z or 0  -- Default Z to 0 if not provided
-  
-  return x>=x1 and x<=x2 and y>=y1 and y<=y2 and z>=z1 and z<=z2
+local function inside(x, y, box, z)
+    z = z or 0
+    local x1, x2 = math.min(box.p1.x, box.p2.x), math.max(box.p1.x, box.p2.x)
+    local y1, y2 = math.min(box.p1.y, box.p2.y), math.max(box.p1.y, box.p2.y)
+    local z1, z2 = math.min(box.p1.z or 0, box.p2.z or 3), math.max(box.p1.z or 0, box.p2.z or 3)
+    return x >= x1 and x <= x2 and y >= y1 and y <= y2 and z >= z1 and z <= z2
 end
 
 local function insideRegion(x, y, regs, regionName, z)
     local r = regs[regionName]
-    if not r then return false end
-    return inside(x, y, r, z)
+    return r and inside(x, y, r, z) or false
 end
 
 local function format_number(n)
-    if not n then
-        return "0"
-    end
-    
     n = tonumber(n)
-    if not n then
-        return "0"
-    end
-    
-    local s = tostring(math.floor(n)) 
+    if not n then return "0" end
+    local s = tostring(math.floor(n))
     local pos = #s % 3
     if pos == 0 then pos = 3 end
     return s:sub(1, pos) .. s:sub(pos + 1):gsub("(%d%d%d)", ",%1")
 end
 
 local function GetItemLevel(xp)
-    if not xp or type(xp) ~= "number" then
-        return 0
-    end
-    
+    if not xp or type(xp) ~= "number" then return 0 end
     for i = #xpTable, 1, -1 do
-        if xp >= xpTable[i] then
-            return i
-        end
+        if xp >= xpTable[i] then return i end
     end
     return 0
-end
-
-local function getNecklaceID()
-    local container = API.Container_Get_all(94)
-    if container and container[3] and container[3].item_id and container[3].item_id > 0 then
-        return container[3].item_id
-    else
-        return 0
-    end
-end
-
-local function getNecklaceCharges()
-    local container = API.Container_Get_all(94)
-    if not container or type(container) ~= "table" then
-        return 0
-    end
-    if not container[3] or type(container[3]) ~= "table" then
-        return 0
-    end
-    if not container[3].Extra_ints or type(container[3].Extra_ints) ~= "table" then
-        return 0
-    end
-    if not container[3].Extra_ints[2] or container[3].Extra_ints[2] <= 0 then
-        return 0
-    end
-    return container[3].Extra_ints[2]
-end
-
-local function getPorterAmount()
-    local buff = API.Buffbar_GetIDstatus(51490, false)
-    if (buff and buff.found) then
-        local amount = tonumber(buff.text)
-        return amount or 0  
-    end
-    return 0  
-end
-
-local function getRequiredAmount()
-    local varbitValue = API.GetVarbitValue(52157)
-    if varbitValue == 0 then
-        return 500
-    elseif varbitValue == 1 then
-        return 2000
-    else
-        return 500 
-    end
 end
 
 local function recordFishTime()
@@ -334,71 +225,163 @@ local function timeSinceLastFish()
     return API.ScriptRuntime() - lastFishTime
 end
 
-local function isInDeepSeaHub()
-    local player = API.PlayerCoord()
-    local px, py, pz = player.x, player.y, player.z
-    
-    local minX, maxX = math.huge, -math.huge
-    local minY, maxY = math.huge, -math.huge
-    local minZ, maxZ = 0, 3  -- Deep sea fishing is on levels 0-3
-    
-    for regionName, region in pairs(regions) do
-        local x1, x2 = region.p1.x, region.p2.x
-        local y1, y2 = region.p1.y, region.p2.y
-        
-        minX = math.min(minX, x1, x2)
-        maxX = math.max(maxX, x1, x2)
-        minY = math.min(minY, y1, y2)
-        maxY = math.max(maxY, y1, y2)
-        
-        if region.p1.z then
-            minZ = math.min(minZ, region.p1.z)
-        end
-        if region.p2.z then
-            maxZ = math.max(maxZ, region.p2.z)
-        end
+local function findPlayerRegion(px, py, pz)
+    for rn, rb in pairs(regions) do
+        if inside(px, py, rb, pz) then return normalizeFishName(rn) end
     end
-    
-    local buffer = 5
-    minX = minX - buffer
-    maxX = maxX + buffer
-    minY = minY - buffer
-    maxY = maxY + buffer
-    
-    local inHub = px >= minX and px <= maxX and 
-                  py >= minY and py <= maxY and 
-                  pz >= minZ and pz <= maxZ
-    
-    if inHub then
-        print(string.format("[INFO] Player is in Deep Sea Fishing hub at (%.1f, %.1f, %d)", px, py, pz))
-        print(string.format("[INFO] Hub bounds: X(%.1f-%.1f) Y(%.1f-%.1f) Z(%d-%d)", 
-            minX, maxX, minY, maxY, minZ, maxZ))
-    else
-        print(string.format("[INFO] Player is NOT in Deep Sea Fishing hub"))
-        print(string.format("[INFO] Player location: (%.1f, %.1f, %d)", px, py, pz))
-        print(string.format("[INFO] Hub bounds: X(%.1f-%.1f) Y(%.1f-%.1f) Z(%d-%d)", 
-            minX, maxX, minY, maxY, minZ, maxZ))
-    end
-    
-    return inHub
 end
 
----------------------------------------------------------------------
--- LEVEL 2: PORTER FUNCTIONS (DEPEND ON LEVEL 1) --------------------
----------------------------------------------------------------------
+local function nearestNode(px, py, nodes)
+    local best, bd
+    for n, N in pairs(nodes) do
+        local nx, ny = N.x or (N.xMin + N.xMax) / 2, N.y or (N.yMin + N.yMax) / 2
+        local d = (px - nx)^2 + (py - ny)^2
+        if not bd or d < bd then best, bd = n, d end
+    end
+    if not best then
+        handleCriticalError("Unable to find nearest node", string.format("No valid nodes found for position (%.1f, %.1f)", px, py))
+    end
+    return best
+end
 
-local lastPorterCount = -1
-local lastTotalCharges = -1
+-- ═════════════════════════════════════════════════════
+--                     INTERFACE FUNCTIONS                     
+-- ═════════════════════════════════════════════════════
 
-local function hasPorter()
-    local preferred = {29276, 29278, 29280, 29282, 29284, 29286, 51491}
-    for _, id in ipairs(preferred) do
-        if Inventory:Contains(id) then
-            return id, porterCharges[id] or 0
+local function getNecklaceID()
+    local container = API.Container_Get_all(94)
+    return (container and container[3] and container[3].item_id and container[3].item_id > 0) and container[3].item_id or 0
+end
+
+local function getNecklaceCharges()
+    local container = API.Container_Get_all(94)
+    return container and container[3] and container[3].Extra_ints and container[3].Extra_ints[2] or 0
+end
+
+local function getPorterAmount()
+    local buff = API.Buffbar_GetIDstatus(51490, false)
+    return buff and buff.found and tonumber(buff.text) or 0
+end
+
+local function getRequiredAmount()
+    return API.GetVarbitValue(52157) == 1 and 2000 or 500
+end
+
+local function checkDialogue()
+    return API.VB_FindPSettinOrder(2874).state == 12
+end
+
+local function checkAnim()
+    return API.ReadPlayerAnim() == 0
+end
+
+local function findNPC(objID, objType, distance)
+    return API.GetAllObjArray1({objID}, distance or 30, {objType})[1] or false
+end
+
+local function isEquipmentOpen()
+    return API.VB_FindPSettinOrder(3074).state == 1
+end
+
+local function openEquipment()
+    for i = 1, 3 do
+	if isEquipmentOpen() then
+		print(string.format("[DEBUG] Equipment tab opened on try %d", i))
+		return true
+	end
+	print(string.format("[DEBUG] Opening Equipment tab (try %d)", i))
+        API.DoAction_Interface(0xc2, 0xffffffff, 1, 1431, 0, 10, API.OFF_ACT_GeneralInterface_route)
+        API.RandomSleep2(math.random(600,1800), 400, 200)
+    end
+    error("[ERROR] Unable to open Equipment tab")
+    return false
+end
+
+local function isBackpackOpen()
+    return API.VB_FindPSettinOrder(3039).state == 1
+end
+
+local function openBackpack()
+    for i = 1, 3 do
+	if isBackpackOpen() then
+		print(string.format("[DEBUG] Backpack tab opened on try %d", i))
+		return true
+	end
+	print(string.format("[DEBUG] Opening Backpack tab (try %d)", i))
+	API.DoAction_Interface(0xc2,0xffffffff,1,1431,0,9,API.OFF_ACT_GeneralInterface_route)
+        API.RandomSleep2(math.random(600,1800), 400, 200)
+    end
+    error("[ERROR] Unable to open Backpack tab")
+    return false
+end
+
+function maybeEnterPin()
+    if API.VB_FindPSettinOrder(2874).state == 18 then
+        print("[PIN] PIN window detected -> entering PIN")
+        API.DoBankPin(bankPin)
+        API.RandomSleep2(math.random(1200,2400),200,200)
+        local s = API.VB_FindPSettinOrder(2874).state
+        if s == 12 or s == 18 then
+            error("[PIN] - PIN window still present after one try / wrong pin")
+            return false
+        end
+        print("[PIN] PIN entered successfully")
+        return true
+    else
+        print("[PIN] - No bank pin window detected")
+        return true
+    end
+end
+
+-- ═════════════════════════════════════════════════════
+--               ERROR HANDLING / VALIDATION FUNCTIONS                   
+-- ═════════════════════════════════════════════════════
+
+local function handleCriticalError(errorMessage, context)
+    print("===========================================")
+    print("           CRITICAL ERROR OCCURRED        ")
+    print("===========================================")
+    print(string.format("[FATAL] %s", errorMessage))
+    if context then print(string.format("[CONTEXT] %s", context)) end
+    print(string.format("[TIME] %s", os.date("%Y-%m-%d %H:%M:%S")))
+    print(string.format("[RUNTIME] %s", API.ScriptRuntimeString()))
+    print(string.format("[ACTIVITY] %s", fishingAction))
+    local player = API.PlayerCoord()
+    local regionName = findPlayerRegion(player.x, player.y, player.z)
+    print(string.format("[LOCATION] Player at: (%.1f, %.1f, %d) [%s]", player.x, player.y, player.z, regionName or "Unknown"))
+    print("[ACTION] Script will now terminate")
+    print("===========================================")
+    API.Write_LoopyLoop(false)
+    error(string.format("[FATAL] %s", errorMessage))
+end
+
+local function isInDeepSeaHub()
+    local region = API.PlayerRegion()
+    local x, y, z = region.x, region.y, region.z
+    local validRegions = {{32, 111, 8303}, {32, 110, 8302}, {33, 111, 8559}, {33, 110, 8558}}
+    for _, validRegion in ipairs(validRegions) do
+        if x == validRegion[1] and y == validRegion[2] and z == validRegion[3] then
+            print(string.format("[INFO] Player in Deep Sea Fishing hub at (%d, %d, %d)", x, y, z))
+            return true
         end
     end
-    local fallback = {29275, 29277, 29279, 29281, 29283, 29285, 51490}
-    for _, id in ipairs(fallback) do
+    print(string.format("[INFO] Player NOT in Deep Sea Fishing hub. Current: (%d, %d, %d)", x, y, z))
+    return false
+end
+
+local function checkRequiredLevel() 
+    if API.XPLevelTable(API.GetSkillXP("FISHING")) < levelRequirements[fishingAction] then
+        error(string.format("Need Fishing level %d for %s (current: %d)", levelRequirements[fishingAction], fishingAction, API.XPLevelTable(API.GetSkillXP("FISHING"))))
+    end
+    return true
+end
+
+-- ═════════════════════════════════════════════════════
+--                     PORTER FUNCTIONS                     
+-- ═════════════════════════════════════════════════════
+
+local function hasPorter()
+    for _, id in ipairs(ALL_PORTERS) do  
         if Inventory:Contains(id) then
             return id, porterCharges[id] or 0
         end
@@ -407,260 +390,100 @@ local function hasPorter()
 end
 
 local function howManyPorters()
-    local allPorters = {
-        29276, 29278, 29280, 29282, 29284, 29286, 51491,
-        29275, 29277, 29279, 29281, 29283, 29285, 51490
-    }
-    local porterCount = 0
-    local totalCharges = 0
-
-    for _, id in ipairs(allPorters) do
+    local count, charges = 0, 0
+    for _, id in ipairs(ALL_PORTERS) do  
         if Inventory:Contains(id) then
-            local count = Inventory:GetItemAmount(id)
-            porterCount = porterCount + count
-            totalCharges = totalCharges + (count * (porterCharges[id] or 0))
+            local amount = Inventory:GetItemAmount(id) or 0
+            count = count + amount
+            charges = charges + (amount * (porterCharges[id] or 0))
         end
     end
-
-    if porterCount ~= lastPorterCount or totalCharges ~= lastTotalCharges then
-        if porterCount > 0 then
-            print("[DEBUG] Porter inventory changed: " .. porterCount .. " porters worth " .. totalCharges .. " total charges")
-        else
-            print("[DEBUG] No porters in inventory")
-        end
-        lastPorterCount = porterCount
-        lastTotalCharges = totalCharges
-    end
-
-    return porterCount, totalCharges
+    return count, charges
 end
 
-local function checkPorter(howMany)
+local function checkPorter(threshold)
     local buff = API.Buffbar_GetIDstatus(51490, false)
-    local hasPorterBuff = buff and buff.found
-    
-    if not hasPorterBuff then
-        return true
-    end
-    
+    if not (buff and buff.found) then return true end 
     local necklaceCharges = getNecklaceCharges() or 0
     local buffCharges = tonumber(buff.text) or 0
-    
     local currentCharges = math.max(necklaceCharges, buffCharges)
-    
-    local needsPorter = currentCharges <= howMany
-    
-    return needsPorter
+    return currentCharges <= threshold
 end
 
 local function getGOTEChargingThreshold()
     local porterId, porterChargeValue = hasPorter()
-    
-    local currentState = tostring(porterId) .. "_" .. tostring(porterChargeValue)
-    
-    if currentState ~= lastPorterInventoryState then
-        lastPorterInventoryState = currentState
-        
-        if porterId > 0 then
-            local maxThreshold = 500 - porterChargeValue
-            currentGOTEThreshold = math.random(1, maxThreshold)
-            print("[DEBUG] Porter inventory changed - new GOTE threshold: " .. currentGOTEThreshold)
-        else
-            currentGOTEThreshold = math.random(0, 450) 
-            print("[DEBUG] No porters available - new GOTE threshold: " .. currentGOTEThreshold)
-        end
+    local state = porterId .. "_" .. porterChargeValue
+    if state ~= lastPorterInventoryState then
+        lastPorterInventoryState = state
+        currentGOTEThreshold = porterId > 0 and math.random(1, math.max(1, 500 - porterChargeValue)) or math.random(1, 450)
+        print("[DEBUG] New GOTE threshold: " .. currentGOTEThreshold)
     end
-    
     return currentGOTEThreshold
 end
 
 local function hasEnoughPortersForGOTE()
-    if not useGOTE then
-        return true  -- Not using GOTE, so this check doesn't matter
-    end
-    
-    local requiredAmount = getRequiredAmount()
-    local currentAmount = getPorterAmount()
-    local chargesNeeded = requiredAmount - currentAmount
-    
-    if chargesNeeded <= 0 then
-        return true  -- Already fully charged
-    end
-    
-    local _, totalPorterCharges = howManyPorters()
-    
-    print(string.format("[DEBUG] GOTE needs %d more charges, have %d porter charges available", 
-        chargesNeeded, totalPorterCharges))
-    
-    return totalPorterCharges >= chargesNeeded
+    if not useGOTE then return true end
+    local required, current
+    required = getRequiredAmount()
+    current = getPorterAmount()
+    local needed = required - current
+    if needed <= 0 then return true end
+    local _, available = howManyPorters()
+    print(string.format("[DEBUG] GOTE needs %d more charges, have %d available", needed, available))
+    return available >= needed
 end
 
----------------------------------------------------------------------
--- LEVEL 3: NODE & NAVIGATION FUNCTIONS (DEPEND ON LEVEL 1-2) -------
----------------------------------------------------------------------
-
-local nodes = {
-    sailfish   = {xMin=2135,xMax=2149,yMin=7124,yMax=7136,name="sailfish"},
-    minnows    = {xMin=2127,xMax=2141,yMin=7085,yMax=7101,name="minnows"},
-    frenzyS    = {xMin=2062,xMax=2073,yMin=7108,yMax=7112,name="frenzyS"},
-    frenzyN    = {xMin=2064,xMax=2074,yMin=7121,yMax=7131,name="frenzyN"},
-    swarm      = {xMin=2090,xMax=2103,yMin=7075,yMax=7079,name="swarm"},
-    jellyfish  = {xMin=2083,xMax=2114,yMin=7109,yMax=7145,name="jellyfish"},
-
-    minJunc    = {xMin=2117,xMax=2123,yMin=7108,yMax=7112,name="minJunc"},
-    midJunc    = {xMin=2097,xMax=2103,yMin=7108,yMax=7113,name="midJunc"},
-    southJunc  = {xMin=2102,xMax=2106,yMin=7100,yMax=7105,name="southJunc"},
-    
-    -- Bank/Net nodes
-    bankPorterEnter  = {xMin=2132,xMax=2135,yMin=7103,yMax=7110,name="bankPorterEnter"},
-    bankPorterJelly  = {xMin=2096,xMax=2103,yMin=7111,yMax=7116,name="bankPorterJelly"},
-    netJelly         = {xMin=2096,xMax=2102,yMin=7089,yMax=7094,name="netJelly"},
-    netEnter         = {xMin=2114,xMax=2122,yMin=7121,yMax=7125,name="netEnter"},
-}
-
-local function getNodePoint(n)
-  if n.xMin then
-    return { x = math.floor(n.xMin + math.random()*(n.xMax-n.xMin)),
-             y = math.floor(n.yMin + math.random()*(n.yMax-n.yMin)),
-             z = 0 }
-  end
-  return n
-end
-
-local function getBankingRegion(fishingAction, usePorters)
-    local actionClean = normalizeFishName(fishingAction)
-    
-    if actionClean == "sailfish" then
-        return usePorters and "bankPorterEnter" or "netEnter"
-    elseif actionClean == "minnows" then
-        return usePorters and "bankPorterEnter" or "netEnter"
-    elseif actionClean == "swarm" then
-        return usePorters and "bankPorterJelly" or "netJelly"
-    elseif actionClean == "jellyfish" or actionClean == "bluejellyfish" or actionClean == "greenjellyfish" then
-        return usePorters and "bankPorterJelly" or "netJelly"
-    elseif actionClean == "frenzyS" or actionClean == "frenzyN" then
-        return usePorters and "bankPorterJelly" or "netJelly"
-    else
-        return usePorters and "bankPorterJelly" or "netJelly"
+local function trackPorterBuffUsage()
+    if not usePorters or not activityUsesPorters() then
+        return
+    end
+    local currentBuffAmount = getPorterAmount()
+    if not buffTrackingInitialized or currentBuffAmount > lastPorterBuffAmount then
+        lastPorterBuffAmount = currentBuffAmount
+        buffTrackingInitialized = true
+        if currentBuffAmount > 0 then
+            print(string.format("[DEBUG] Porter buff tracking initialized: %d", currentBuffAmount))
+        end
+        return
+    end
+    if currentBuffAmount < lastPorterBuffAmount then
+        local chargesConsumed = lastPorterBuffAmount - currentBuffAmount
+        portersUsed = portersUsed + chargesConsumed
+        lastPorterBuffAmount = currentBuffAmount
     end
 end
 
-local function canBankForPorters()
-    if not usePorters then
-        return false  -- Not using porters at all
+-- ═════════════════════════════════════════════════════
+--                     AURA MANAGEMENT                     
+-- ═════════════════════════════════════════════════════
+
+local function handleAuraManagement()
+    if not whichAura or whichAura == "" or not AURAS then return true end
+    AURAS.pin(bankPin)
+    local auraTimeRemaining = AURAS.auraTimeRemaining()
+    local refreshThreshold = AURAS.auraRefreshTime or 0
+    if auraTimeRemaining > refreshThreshold then return true end
+    print(string.format("[INFO] Refreshing aura '%s' (%.1f min remaining)", whichAura, auraTimeRemaining / 60))
+    if not AURAS.activateAura(whichAura) then
+        handleCriticalError("Failed to activate selected aura", string.format("AURAS.activateAura('%s') returned false - aura activation failed", whichAura))
     end
-    
-    local bankingRegion = getBankingRegion(fishingAction, usePorters)
-    
-    local supportsPorterPresets = (bankingRegion == "bankPorterEnter" or bankingRegion == "bankPorterJelly")
-    
-    if not supportsPorterPresets then
-        print(string.format("[WARN] Current banking region '%s' doesn't support porter presets", bankingRegion))
-        return false
-    end
-    
-    print(string.format("[DEBUG] Banking region '%s' supports porter presets", bankingRegion))
-    return true
+    print(string.format("[DEBUG] Activated aura: '%s'", whichAura))
+    API.RandomSleep2(math.random(700, 1200), 1200, math.random(300, 600))
+    return API.DoAction_Interface(0xc2, 0xffffffff, 1, 1431, 0, 9, API.OFF_ACT_GeneralInterface_route)
 end
 
-local function findPlayerRegion(px,py,pz)  
-  for rn,rb in pairs(regions) do
-    if inside(px,py,rb,pz) then return normalizeFishName(rn) end
-  end
+-- ═════════════════════════════════════════════════════
+--                 FISH TRACKING FUNCTIONS                 
+-- ═════════════════════════════════════════════════════
+
+local function getActivityType(action)
+    return ACTIVITY_TYPES[normalizeFishName(action)] or ACTIVITY_TYPES.default
 end
-
-local function nearestNode(px,py,nodes)
-  local best,bd
-  for n,N in pairs(nodes) do
-    local nx,ny = N.x or (N.xMin+N.xMax)/2, N.y or (N.yMin+N.yMax)/2
-    local d=(px-nx)^2+(py-ny)^2
-    if not bd or d<bd then best,bd=n,d end
-  end
-  return best
-end
-
-local function findDepositLocation()
-    local bankingRegion = getBankingRegion(fishingAction, usePorters)
-    local bankRegion = regions[bankingRegion]
-    
-    if not bankRegion then
-        error(("[ERROR] Invalid banking region: %s"):format(bankingRegion))
-        return nil
-    end
-    
-    local randomPt = randomPointInRegion(bankRegion)
-    
-    local loc = {
-        x = randomPt.x,
-        y = randomPt.y,
-        z = 0
-    }
-    
-    if bankingRegion == "bankPorterEnter" then
-        loc.id = 110591
-        loc.action = usePorters and 0x33 or 0x3c
-        loc.route = usePorters and API.OFF_ACT_GeneralObject_route2 or API.OFF_ACT_GeneralObject_route3
-
-    elseif bankingRegion == "bankPorterJelly" then
-        loc.id = 110860
-        loc.action = usePorters and 0x33 or 0x3c
-        loc.route = usePorters and API.OFF_ACT_GeneralObject_route3 or API.GeneralObject_route_useon
-
-    elseif bankingRegion == "netJelly" then
-        loc.id = 110857
-        loc.action = 0x29
-        loc.route = API.OFF_ACT_GeneralObject_route2
-
-    elseif bankingRegion == "netEnter" then
-        loc.id = 110857
-        loc.action = 0x29
-        loc.route = API.OFF_ACT_GeneralObject_route2
-
-    else
-        error(("[ERROR] Unhandled banking region: %s"):format(bankingRegion))
-        return nil
-    end
-    
-    print(("[INFO] Selected banking region: %s at (%.1f, %.1f)"):format(bankingRegion, loc.x, loc.y))
-    return loc
-end
-
----------------------------------------------------------------------
--- LEVEL 4: CHAT & STATS (DEPEND ON LEVEL 1) ------------------------
----------------------------------------------------------------------
-
-local fishCounts     = {}
-local prevFishCounts = {}
-local unpack = unpack or table.unpack
-
-local function clearAllFishData()
-    print("[INFO] Clearing all previous fish data...")
-    
-    for _, f in ipairs(FISH_TYPES) do
-        local name, _, _, id = unpack(f)
-        startingInventory[name] = id and Inventory:GetItemAmount(id) or 0
-    end
-    
-    for _, f in ipairs(FISH_TYPES) do
-        fishCounts[f[1]] = 0
-        prevFishCounts[f[1]] = 0
-    end
-    
-    totalFish = 0
-end
-
-local totalFish= 0
-local lastChatCount = 0
-local startXp = API.GetSkillXP("FISHING")
-local portersUsed = 0
-
-API.SetDrawLogs(true)
-API.SetDrawTrackedSkills(true)
 
 local function calcTotalFish()
     local sum = 0
     for _, f in ipairs(FISH_TYPES) do
-        sum = sum + fishCounts[f[1]]
+        sum = sum + (fishCounts[f[1]] or 0)
     end
     return sum
 end
@@ -669,128 +492,67 @@ local function countCurrentSessionFish()
     local sessionCounts = {}
     for _, f in ipairs(FISH_TYPES) do
         local name, _, _, id = unpack(f)
-        local currentAmount = id and Inventory:GetItemAmount(id) or 0
-        local startingAmount = startingInventory[name] or 0
-        
-        local sessionFish = math.max(0, currentAmount - startingAmount)
-        if sessionFish > 0 then
-            sessionCounts[name] = sessionFish
+        if id then
+            local currentAmount = Inventory:GetItemAmount(id) or 0
+            local startingAmount = startingInventory[name] or 0
+            local sessionFish = math.max(0, currentAmount - startingAmount)
+            if sessionFish > 0 then
+                sessionCounts[name] = sessionFish
+            end
         end
     end
     return sessionCounts
 end
 
-local function checkForFrenzyCompletion()
+local function updateFrenzyTracking()
     if waitingForFrenzyCompletion and API.ReadPlayerAnim() == 0 then
         waitingForFrenzyCompletion = false
         frenzyInteractions = frenzyInteractions + 1
         lastFishCaught = API.ScriptRuntime()
-        
         print(string.format("[DEBUG] Frenzy interaction #%d completed", frenzyInteractions))
         return true
     end
     return false
-end 
+end
 
-local function checkForMinnowIncrease()
-    if normalizeFishName(fishingAction) == "minnows" then
-        local currentMinnowCount = Inventory:GetItemAmount(42241) or 0
-        
-        if currentMinnowCount > lastKnownMinnowCount then
-            local increase = currentMinnowCount - lastKnownMinnowCount
-            minnowInteractions = minnowInteractions + increase
-            lastKnownMinnowCount = currentMinnowCount
-            lastFishCaught = API.ScriptRuntime()
-            
-            print(string.format("[DEBUG] Minnows increased by %d, total interactions: %d", increase, minnowInteractions))
-            return true
-        end
-        
+local function updateMinnowTracking()
+    local currentMinnowCount = Inventory:GetItemAmount(42241) or 0
+    if currentMinnowCount > lastKnownMinnowCount then
+        local increase = currentMinnowCount - lastKnownMinnowCount
+        minnowInteractions = minnowInteractions + increase
         lastKnownMinnowCount = currentMinnowCount
+        lastFishCaught = API.ScriptRuntime()
+        print(string.format("[DEBUG] Minnows increased by %d, total: %d", increase, minnowInteractions))
+        return true
     end
+    lastKnownMinnowCount = currentMinnowCount
     return false
 end
 
-local function trackPorterBuffUsage()
-    if not usePorters or not activityUsesPorters() then
-        return  -- Skip all porter tracking for frenzy/minnows
-    end
-    
-    local currentBuffAmount = getPorterAmount()
-    
-    if not buffTrackingInitialized or currentBuffAmount > lastPorterBuffAmount then
-        lastPorterBuffAmount = currentBuffAmount
-        buffTrackingInitialized = true
-        if currentBuffAmount > 0 then
-            print(string.format("[DEBUG] Porter buff tracking initialized/reset to: %d", currentBuffAmount))
-        end
-        return
-    end
-    
-    if currentBuffAmount < lastPorterBuffAmount then
-        local chargesConsumed = lastPorterBuffAmount - currentBuffAmount
-        portersUsed = portersUsed + chargesConsumed
-        lastPorterBuffAmount = currentBuffAmount
-    end
-end
-
-local function detectNewFish()
-    if checkForFrenzyCompletion() then
-        return true
-    end
-    
-    if checkForMinnowIncrease() then
-        return true
-    end
-    
-    if normalizeFishName(fishingAction) == "frenzyS" or normalizeFishName(fishingAction) == "frenzyN" then
-        return false  -- Frenzy tracking is handled via checkForFrenzyCompletion()
-    end
-    
-    if normalizeFishName(fishingAction) == "minnows" then
-        return false  -- Minnow tracking is handled via checkForMinnowIncrease()
-    end
-    
+local function updateRegularFishTracking()
     local currentInventory = countCurrentSessionFish()
     local currentTotal = 0
     for _, count in pairs(currentInventory) do
         currentTotal = currentTotal + count
     end
-    
-    if currentTotal ~= lastKnownFishCount then
-        --print(string.format("[DEBUG] Fish count changed: %d -> %d", lastKnownFishCount, currentTotal))
-    end
-    
     if currentTotal > lastKnownFishCount then
         lastFishCaught = API.ScriptRuntime()
         lastKnownFishCount = currentTotal
-        
         return true
     end
-    
-    lastKnownFishCount = currentTotal  -- Always update the known count
+    lastKnownFishCount = currentTotal
     return false
 end
 
-local function timeSinceLastFishCaught()
-    return API.ScriptRuntime() - lastFishCaught
-end
-
-local function updateInventoryBaseline()
-    print("[INFO] Updating inventory baseline after banking...")
-    for _, f in ipairs(FISH_TYPES) do
-        local name, _, _, id = unpack(f)
-        startingInventory[name] = id and Inventory:GetItemAmount(id) or 0
+local function detectNewFish()
+    local activityType = getActivityType(fishingAction)
+    if activityType == "frenzy" then
+        return updateFrenzyTracking()
+    elseif activityType == "minnows" then
+        return updateMinnowTracking()
+    else
+        return updateRegularFishTracking()
     end
-    
-    lastKnownFishCount = 0
-    
-    if normalizeFishName(fishingAction) == "minnows" then
-        lastKnownMinnowCount = Inventory:GetItemAmount(42241) or 0
-        print("[DEBUG] Minnow baseline updated to: " .. lastKnownMinnowCount)
-    end
-    
-    print("[DEBUG] New baseline set, lastKnownFishCount reset to 0")
 end
 
 local function findChatText()
@@ -799,15 +561,12 @@ local function findChatText()
         local txt = chats[i].text
         if txt then
             local lower = string.lower(txt)
-            local cnt, fishName = string.match(
-                lower,
-                "^you transport to your bank:%s*(%d+)%s*x%s*raw%s*([^.]+)"
-            )
+            local cnt, fishName = string.match(lower, "^you transport to your bank:%s*(%d+)%s*x%s*raw%s*([^.]+)")
             cnt = tonumber(cnt)
             if cnt and fishName then
                 for _, f in ipairs(FISH_TYPES) do
                     if fishName == f[3] then
-                        fishCounts[f[1]] = fishCounts[f[1]] + cnt
+                        fishCounts[f[1]] = (fishCounts[f[1]] or 0) + cnt
                         break
                     end
                 end
@@ -818,17 +577,36 @@ local function findChatText()
     totalFish = calcTotalFish()
 end
 
+local function timeSinceLastFishCaught()
+    return API.ScriptRuntime() - lastFishCaught
+end
+
+local function updateInventoryBaseline()
+    for _, f in ipairs(FISH_TYPES) do
+        local name, _, _, id = unpack(f)
+        startingInventory[name] = id and Inventory:GetItemAmount(id) or 0
+    end
+    lastKnownFishCount = 0
+    if getActivityType(fishingAction) == "minnows" then
+        lastKnownMinnowCount = Inventory:GetItemAmount(42241) or 0
+        print("[DEBUG] Minnow baseline updated to: " .. lastKnownMinnowCount)
+    end
+    print("[DEBUG] New baseline set, lastKnownFishCount reset to 0")
+end
+
+-- ═════════════════════════════════════════════════════
+--                   STATISTICS FUNCTIONS                   
+-- ═════════════════════════════════════════════════════
+
 local function getStatsData()
     local profit_total = 0
     local fishData = {}
-    
     for _, f in ipairs(FISH_TYPES) do
-        local cnt = fishCounts[f[1]]
+        local cnt = fishCounts[f[1]] or 0
         if cnt > 0 then
             local price = f[4] and (prices[f[4]] or 0) or 0
             local tot = cnt * price
             profit_total = profit_total + tot
-            
             table.insert(fishData, {
                 name = f[2],
                 count = cnt,
@@ -837,12 +615,11 @@ local function getStatsData()
             })
         end
     end
-    
-    local xpGained = API.GetSkillXP("FISHING") - startXp
+    local currentXp = API.GetSkillXP("FISHING")
+    local xpGained = currentXp - startXp
     local elapsed = API.ScriptRuntime()
     local xpPerHr = elapsed > 0 and math.floor(xpGained * 3600 / elapsed) or 0
     local profitPerHr = elapsed > 0 and math.floor(profit_total * 3600 / elapsed) or 0
-    
     return {
         fishData = fishData,
         xpGained = xpGained,
@@ -851,56 +628,6 @@ local function getStatsData()
         profitPerHr = profitPerHr
     }
 end
-
-local function resetScriptVariables()
-    print("[INFO] Resetting script variables for new run...")
-    
-    startingInventory = {}
-    for _, f in ipairs(FISH_TYPES) do
-        local name, _, _, id = unpack(f)
-        startingInventory[name] = id and Inventory:GetItemAmount(id) or 0
-    end
-    
-    fishCounts = {}
-    for _, f in ipairs(FISH_TYPES) do
-        fishCounts[f[1]] = 0
-    end
-    
-    totalFish = 0
-    lastChatCount = 0
-    portersUsed = 0  -- Back to tracking individual charges
-    lastPorterBuffAmount = 0  -- Reset buff tracking
-    buffTrackingInitialized = false  -- Reset initialization flag
-    frenzyInteractions = 0
-    waitingForFrenzyCompletion = false
-    minnowInteractions = 0
-    lastKnownMinnowCount = Inventory:GetItemAmount(42241) or 0
-    
-    lastDisplayedValues = {
-        totalFish = 0, xpGained = 0, gpEarned = 0, porterCharges = 0,
-        porterCount = 0, totalCharges = 0, portersUsed = 0, inventorySpaces = 0,
-        playerAnim = 0, playerMoving = false, currentRegion = "", playerX = 0, playerY = 0,
-        inventoryHash = "", timeSinceActionSeconds = 0, timeSinceFishSeconds = 0,
-        nextIdleSeconds = 0, auraTimeMinutes = 0, runtimeMinutes = 0
-    }
-    
-    lastFishCaught = API.ScriptRuntime()
-    lastKnownFishCount = 0
-    
-    currentGOTEThreshold = 0
-    lastPorterInventoryState = ""
-    lastPorterCount = -1
-    lastTotalCharges = -1
-    
-    startXp = API.GetSkillXP("FISHING")
-    lastFishTime = API.ScriptRuntime()
-    afk = API.ScriptRuntime()
-    randomTime = 0
-end
-
----------------------------------------------------------------------
--- LEVEL 5: METRICS FUNCTIONS (DEPEND ON LEVEL 1-4) -----------------
----------------------------------------------------------------------
 
 local function calculateInventoryValue(sessionInventory)
     local totalValue = 0
@@ -916,37 +643,13 @@ local function calculateInventoryValue(sessionInventory)
     return totalValue
 end
 
-local lastDisplayedValues = {
-    totalFish = 0,
-    xpGained = 0,
-    gpEarned = 0,
-    porterCharges = 0,
-    porterCount = 0,
-    totalCharges = 0,
-    portersUsed = 0,
-    inventorySpaces = 0,
-    playerAnim = 0,
-    playerMoving = false,
-    currentRegion = "",
-    playerX = 0,
-    playerY = 0,
-    inventoryHash = "",
-    timeSinceActionSeconds = 0,
-    timeSinceFishSeconds = 0,
-    auraTimeMinutes = 0,
-    runtimeMinutes = 0
-}
-
-local function hasSignificantChange()
+local function collectCurrentMetrics()
     local stats = getStatsData()
-    
-    local currentCharges = 0
-    local porterCount, totalCharges = 0, 0
+    local currentCharges, porterCount, totalCharges = 0, 0, 0
     if usePorters and activityUsesPorters() then
         currentCharges = getPorterAmount()
         porterCount, totalCharges = howManyPorters()
     end
-    
     local sessionInventory = countCurrentSessionFish()
     local sessionFishTotal = 0
     for _, count in pairs(sessionInventory) do
@@ -954,184 +657,108 @@ local function hasSignificantChange()
     end
     local inventoryValue = calculateInventoryValue(sessionInventory)
     local totalGpEarned = stats.profit_total + inventoryValue
-    local totalSessionFish = sessionFishTotal + totalFish
-    local playerAnim = API.ReadPlayerAnim()
-    local playerMoving = API.ReadPlayerMovin2()
-    local player = API.PlayerCoord()
-    local px, py, pz = player.x, player.y, player.z 
-    local currentRegion = findPlayerRegion(px, py, pz) or "Unknown"
-    
-    local inventorySpaces = 0
-    if activityUsesPorters() then
-        inventorySpaces = Inventory:FreeSpaces()
+    local totalSessionFish, fishLabel, showGP
+    local activityType = getActivityType(fishingAction)
+    if activityType == "frenzy" then
+        totalSessionFish = frenzyInteractions + totalFish
+        fishLabel = "Interactions:"
+        showGP = false
+    elseif activityType == "minnows" then
+        totalSessionFish = minnowInteractions + totalFish
+        fishLabel = "Minnows:"
+        showGP = false
+    else
+        totalSessionFish = sessionFishTotal + totalFish
+        fishLabel = "Fish:"
+        showGP = true
     end
-    
+    local player = API.PlayerCoord()
+    local px, py, pz = player.x, player.y, player.z
+    local currentRegion = findPlayerRegion(px, py, pz) or "Unknown"
+    local inventorySpaces = activityUsesPorters() and Inventory:FreeSpaces() or 0
     local timeSinceActionSeconds = math.floor(timeSinceLastFish())
     local runtimeMinutes = math.floor(API.ScriptRuntime() / 60)
-    
     local auraTimeMinutes = 0
-    if whichAura and whichAura ~= "" then
+    if whichAura and whichAura ~= "" and AURAS then
         local auraTime = AURAS.auraTimeRemaining()
         auraTimeMinutes = auraTime > 0 and math.floor(auraTime / 60) or 0
     end
-    
     local inventoryItems = {}
     for name, count in pairs(sessionInventory) do
         table.insert(inventoryItems, name .. ":" .. count)
     end
     table.sort(inventoryItems)
     local inventoryHash = table.concat(inventoryItems, "|")
-    
-    local hasChanges = false
-    
-    local porterChanges = false
-    if activityUsesPorters() then
-        porterChanges = (lastDisplayedValues.porterCharges ~= currentCharges or
-                        lastDisplayedValues.porterCount ~= porterCount or
-                        lastDisplayedValues.totalCharges ~= totalCharges or
-                        lastDisplayedValues.portersUsed ~= portersUsed or
-                        lastDisplayedValues.inventorySpaces ~= inventorySpaces)
-    end
-    
-    if lastDisplayedValues.totalFish ~= totalSessionFish or
-       lastDisplayedValues.xpGained ~= stats.xpGained or
-       lastDisplayedValues.gpEarned ~= totalGpEarned or
-       porterChanges or
-       lastDisplayedValues.playerAnim ~= playerAnim or
-       lastDisplayedValues.playerMoving ~= playerMoving or
-       lastDisplayedValues.currentRegion ~= currentRegion or
-       lastDisplayedValues.playerX ~= player.x or
-       lastDisplayedValues.playerY ~= player.y or
-       lastDisplayedValues.inventoryHash ~= inventoryHash or
-       lastDisplayedValues.timeSinceActionSeconds ~= timeSinceActionSeconds or
-       lastDisplayedValues.auraTimeMinutes ~= auraTimeMinutes or
-       lastDisplayedValues.runtimeMinutes ~= runtimeMinutes then
-        
-        hasChanges = true
-        
-        lastDisplayedValues.totalFish = totalSessionFish
-        lastDisplayedValues.xpGained = stats.xpGained
-        lastDisplayedValues.gpEarned = totalGpEarned
-        lastDisplayedValues.porterCharges = currentCharges
-        lastDisplayedValues.porterCount = porterCount
-        lastDisplayedValues.totalCharges = totalCharges
-        lastDisplayedValues.portersUsed = portersUsed
-        lastDisplayedValues.inventorySpaces = inventorySpaces
-        lastDisplayedValues.playerAnim = playerAnim
-        lastDisplayedValues.playerMoving = playerMoving
-        lastDisplayedValues.currentRegion = currentRegion
-        lastDisplayedValues.playerX = player.x
-        lastDisplayedValues.playerY = player.y
-        lastDisplayedValues.inventoryHash = inventoryHash
-        lastDisplayedValues.timeSinceActionSeconds = timeSinceActionSeconds
-        lastDisplayedValues.auraTimeMinutes = auraTimeMinutes
-        lastDisplayedValues.runtimeMinutes = runtimeMinutes
-    end
-    
-    return hasChanges
+    return {
+        stats = stats,
+        totalSessionFish = totalSessionFish,
+        fishLabel = fishLabel,
+        showGP = showGP,
+        totalGpEarned = totalGpEarned,
+        currentCharges = currentCharges,
+        porterCount = porterCount,
+        totalCharges = totalCharges,
+        sessionInventory = sessionInventory,
+        inventorySpaces = inventorySpaces,
+        currentRegion = currentRegion,
+        playerPos = {x = px, y = py, z = pz},
+        timeSinceActionSeconds = timeSinceActionSeconds,
+        auraTimeMinutes = auraTimeMinutes,
+        runtimeMinutes = runtimeMinutes,
+        inventoryHash = inventoryHash
+    }
 end
 
-local function buildMetricsTable()
-    local stats = getStatsData()
-    
-    local currentCharges = 0
-    local porterCount, totalCharges = 0, 0
-    if usePorters and activityUsesPorters() then
-        currentCharges = getPorterAmount()
-        porterCount, totalCharges = howManyPorters()
-    end
-    
-    local sessionInventory = countCurrentSessionFish()
+local function buildMetricsTable(metrics)
     local runtimeSeconds = API.ScriptRuntime()
-    
-    local sessionFishTotal = 0
-    for name, count in pairs(sessionInventory) do
-        sessionFishTotal = sessionFishTotal + count
-    end
-    
-    local inventoryValue = calculateInventoryValue(sessionInventory)
-    local totalGpEarned = stats.profit_total + inventoryValue
-    
-    local totalSessionFish
-    local fishPerHour
-    local fishLabel
-    local showGP = true  -- Whether to show GP tracking
-    
-    if normalizeFishName(fishingAction) == "frenzyS" or normalizeFishName(fishingAction) == "frenzyN" then
-        totalSessionFish = frenzyInteractions + totalFish
-        fishLabel = "Interactions:"
-        showGP = false  -- No GP for frenzy
-    elseif normalizeFishName(fishingAction) == "minnows" then
-        totalSessionFish = minnowInteractions + totalFish
-        fishLabel = "Minnows:"
-        showGP = false  -- No GP for minnows
-    else
-        totalSessionFish = sessionFishTotal + totalFish
-        fishLabel = "Fish:"
-        showGP = true   -- Regular fishing has GP
-    end
-    
-    fishPerHour = runtimeSeconds > 0 and math.floor(totalSessionFish * 3600 / runtimeSeconds) or 0
-    local profitPerHr = runtimeSeconds > 0 and math.floor(totalGpEarned * 3600 / runtimeSeconds) or 0
-    
-    local metrics = {
+    local fishPerHour = runtimeSeconds > 0 and math.floor(metrics.totalSessionFish * 3600 / runtimeSeconds) or 0
+    local profitPerHr = runtimeSeconds > 0 and math.floor(metrics.totalGpEarned * 3600 / runtimeSeconds) or 0
+    local metricsTable = {
         { "Deep Sea Fishing", fishingAction .. " (Required Level: " .. levelRequirements[fishingAction] .. ")" },
         { "", "" },
         { "Runtime:", API.ScriptRuntimeString() },
-        { fishLabel, string.format("%d (%d/h)", totalSessionFish, fishPerHour) },
-        { "XP:", string.format("%s (%s/h)", format_number(stats.xpGained), format_number(stats.xpPerHr)) },
+        { metrics.fishLabel, string.format("%d (%d/h)", metrics.totalSessionFish, fishPerHour) },
+        { "XP:", string.format("%s (%s/h)", format_number(metrics.stats.xpGained), format_number(metrics.stats.xpPerHr)) },
     }
-    
-    if showGP then
-        table.insert(metrics, { "GP:", string.format("%s (%s/h)", format_number(totalGpEarned), format_number(profitPerHr)) })
+    if metrics.showGP then
+        table.insert(metricsTable, { "GP:", string.format("%s (%s/h)", format_number(metrics.totalGpEarned), format_number(profitPerHr)) })
     end
-    
-    table.insert(metrics, { "", "" })
-    table.insert(metrics, { "Player State:", string.format("Animating: %s", API.ReadPlayerAnim()) })
-    table.insert(metrics, { "", string.format("Moving: %s", tostring(API.ReadPlayerMovin2())) })
-    table.insert(metrics, { "", "" })
-    
+    table.insert(metricsTable, { "", "" })
+    table.insert(metricsTable, { "Player State:", string.format("Animation: %s", API.ReadPlayerAnim()) })
+    table.insert(metricsTable, { "", string.format("Is Moving: %s", tostring(API.ReadPlayerMovin2())) })
+    table.insert(metricsTable, { "", "" })
     if activityUsesPorters() then
-        table.insert(metrics, { "Inventory:", string.format("%d/28 free spaces", Inventory:FreeSpaces()) })
+        table.insert(metricsTable, { "Inventory:", string.format("%d/28 free spaces", Inventory:FreeSpaces()) })
     end
-    
-    table.insert(metrics, { "Region:", findPlayerRegion(API.PlayerCoord().x, API.PlayerCoord().y, API.PlayerCoord().z) or "Unknown" })
-    
+    table.insert(metricsTable, { "Region:", metrics.currentRegion })
     local interacting = API.ReadLpInteracting()
     if interacting and interacting.Name and interacting.Name ~= "" then
-        table.insert(metrics, { "Interacting:", interacting.Name })
+        table.insert(metricsTable, { "Interacting With:", interacting.Name })
     end
-    
-    local timeSinceAction = timeSinceLastFish()
-    if timeSinceAction > 0 then
-        table.insert(metrics, { "Last Action:", string.format("%.0fs ago", timeSinceAction) })
+    if metrics.timeSinceActionSeconds > 0 then
+        table.insert(metricsTable, { "Last Action:", string.format("%.0fs ago", metrics.timeSinceActionSeconds) })
     end
-    
     if usePorters and activityUsesPorters() then
-        table.insert(metrics, { "", "" })
+        table.insert(metricsTable, { "", "" })
         if useGOTE then
             local requiredAmount = getRequiredAmount()
-            local chargePercent = math.floor((currentCharges / requiredAmount) * 100)
-            table.insert(metrics, { "GOTE:", string.format("%d%% (%d/%d)", chargePercent, currentCharges, requiredAmount) })
+            local chargePercent = math.floor((metrics.currentCharges / requiredAmount) * 100)
+            table.insert(metricsTable, { "GOTE:", string.format("%d%% (%d/%d)", chargePercent, metrics.currentCharges, requiredAmount) })
         else
-            local activeCharges = getPorterAmount()
-            if activeCharges > 0 then
-                table.insert(metrics, { "Porter:", string.format("%d active", activeCharges) })
+            if metrics.currentCharges > 0 then
+                table.insert(metricsTable, { "Porter:", string.format("%d active", metrics.currentCharges) })
             end
         end
-        
-        table.insert(metrics, { "Inventory:", string.format("%d porters (%d charges)", porterCount, totalCharges) })
-        table.insert(metrics, { "Used:", string.format("%d charges", portersUsed) })
+        table.insert(metricsTable, { "Inventory:", string.format("%d porters (%d charges)", metrics.porterCount, metrics.totalCharges) })
+        table.insert(metricsTable, { "Used:", string.format("%d charges", portersUsed) })
     end
-    
     local hasSessionFish = false
     if activityUsesPorters() then  
-        for name, count in pairs(sessionInventory) do
+        for name, count in pairs(metrics.sessionInventory) do
             if not hasSessionFish then
-                table.insert(metrics, { "", "" })
+                table.insert(metricsTable, { "", "" })
                 hasSessionFish = true
             end
-            
             local displayName = name
             for _, f in ipairs(FISH_TYPES) do
                 if f[1] == name then
@@ -1139,7 +766,6 @@ local function buildMetricsTable()
                     break
                 end
             end
-            
             local fishValue = 0
             for _, f in ipairs(FISH_TYPES) do
                 if f[1] == name and f[4] then
@@ -1147,116 +773,151 @@ local function buildMetricsTable()
                     break
                 end
             end
-            
-            table.insert(metrics, { 
+            table.insert(metricsTable, { 
                 displayName .. ":", 
                 string.format("%d (%s gp)", count, format_number(fishValue))
             })
         end
     end
-    
-    if whichAura and whichAura ~= "" then
-        local auraTime = AURAS.auraTimeRemaining()
-        if auraTime > 0 then
-            table.insert(metrics, { "", "" })
-            table.insert(metrics, { "Aura:", string.format("%.0f min left", auraTime / 60) })
-        end
+    if whichAura and whichAura ~= "" and metrics.auraTimeMinutes > 0 then
+        table.insert(metricsTable, { "", "" })
+        table.insert(metricsTable, { "Aura Remaining:", string.format("%.0f min left", metrics.auraTimeMinutes) })
     end
-    
-    local currentConfigState = string.format("%s_%s_%s", fishingAction, tostring(usePorters), tostring(useGOTE))
-    if not configurationDisplayed or lastConfigState ~= currentConfigState then
-        table.insert(metrics, { "", "" })
-        table.insert(metrics, { "-- Configuration --", "" })
-        
-        if activityUsesPorters() then
-            table.insert(metrics, { "Porters:", tostring(usePorters) })
-            table.insert(metrics, { "GOTE:", tostring(useGOTE) })
-            table.insert(metrics, { "Banking:", usePorters and "Porter/Bank" or "Fishing Net" })
-        else
-            table.insert(metrics, { "Activity:", "No porters needed" })
-        end
-        
-        table.insert(metrics, { "Randoms:", tostring(watchRandoms) })
-        if whichAura and whichAura ~= "" then
-            table.insert(metrics, { "Aura:", whichAura })
-        end
-        
-        configurationDisplayed = true
-        lastConfigState = currentConfigState
-    end
-    
-    return metrics
+    return metricsTable
 end
 
 local function tracking()
-    if not API.Read_LoopyLoop() then 
-        return 
-    end
-    
     detectNewFish()
     trackPorterBuffUsage() 
-    
-    if hasSignificantChange() then
-        local metrics = buildMetricsTable()
-        API.DrawTable(metrics)
-    end
+    local metricsTable = buildMetricsTable(collectCurrentMetrics())
+    API.DrawTable(metricsTable)
 end
 
----------------------------------------------------------------------
--- LEVEL 6: PATHFINDING (DEPEND ON LEVEL 1-5) -----------------------
----------------------------------------------------------------------
+-- ═════════════════════════════════════════════════════
+--                   NAVIGATION FUNCTIONS                   
+-- ═════════════════════════════════════════════════════
 
-local function find_path(startLocation, destinationLocation)
-    local playerPosition = API.PlayerCoord()
-    
-    if not edges[startLocation] then
-        startLocation = nearestNode(playerPosition.x, playerPosition.y, nodes)
-        print(("[WARN] find_path: startLocation was invalid, reset to '%s'"):format(startLocation))
+local function getBankingRegion(fishingAction, usePorters)
+    return usePorters and BANKING_REGIONS[normalizeFishName(fishingAction)].porter or BANKING_REGIONS[normalizeFishName(fishingAction)].net
+end
+
+local function canBankForPorters()
+    if not usePorters then return false end
+    return getBankingRegion(fishingAction, usePorters):match("bankPorter")
+end
+
+local function findDepositLocation()
+    local bankingRegion = getBankingRegion(fishingAction, usePorters)
+    local bankRegion = regions[bankingRegion]
+    local config = DEPOSIT_CONFIGS[bankingRegion]
+    local mode = usePorters and "porter" or "net"
+    local randomPt = randomPointInRegion(bankRegion)
+    return {
+        x = randomPt.x, y = randomPt.y, z = 0,
+        id = config.id, action = config.action[mode] or config.action.net, route = config.route[mode]
+    }
+end
+
+local function getNodePoint(n)
+    if not n then
+        handleCriticalError("Invalid node passed to getNodePoint", "Node parameter is nil")
     end
-    
-    if not edges[destinationLocation] then
-        destinationLocation = nearestNode(playerPosition.x, playerPosition.y, nodes)
-        print(("[WARN] find_path: destinationLocation was invalid, reset to '%s'"):format(destinationLocation))
-    end
-    
-    local validEdges = {}
-    for currentNode, connectedNodes in pairs(edges) do
-        validEdges[currentNode] = {}
-        for _, connectedNode in ipairs(connectedNodes) do
-            if nodes[connectedNode] then
-                table.insert(validEdges[currentNode], connectedNode)
-            end
+    return n.xMin and {
+        x = math.floor(n.xMin + math.random() * (n.xMax - n.xMin)), 
+        y = math.floor(n.yMin + math.random() * (n.yMax - n.yMin)), 
+        z = 0 
+    } or n
+end
+
+local function buildValidEdges(start, dest)
+    validEdges = {}
+    for node, connections in pairs(edges) do
+        validEdges[node] = {}
+        for _, connected in ipairs(connections) do
+            if nodes[connected] then table.insert(validEdges[node], connected) end
         end
     end
-    
-    if (startLocation == "frenzyN" and destinationLocation == "frenzyS") or 
-       (startLocation == "frenzyS" and destinationLocation == "frenzyN") then
+    if (start == "frenzyN" and dest == "frenzyS") or (start == "frenzyS" and dest == "frenzyN") then
         table.insert(validEdges["frenzyN"], "frenzyS")
         table.insert(validEdges["frenzyS"], "frenzyN")
     end
-    
-    local pathQueue = { { startLocation } }
-    local visitedNodes = { [startLocation] = true }
-    
+end
+
+local function find_path(startLocation, destinationLocation)
+    local player = API.PlayerCoord()
+    if not edges[startLocation] then
+        startLocation = nearestNode(player.x, player.y, nodes)
+        print(string.format("[WARN] find_path: startLocation invalid, using '%s'", startLocation))
+    end
+    buildValidEdges(startLocation, destinationLocation)
+    pathQueue = {{startLocation}}
+    visitedNodes = {[startLocation] = true}
     while #pathQueue > 0 do
         local currentPath = table.remove(pathQueue, 1)
         local currentNode = currentPath[#currentPath]
-        
-        if currentNode == destinationLocation then
-            return currentPath
-        end
-        
+        if currentNode == destinationLocation then return currentPath end
         for _, nextNode in ipairs(validEdges[currentNode] or {}) do
             if not visitedNodes[nextNode] then
                 visitedNodes[nextNode] = true
-                local newPath = { table.unpack(currentPath) }
+                local newPath = {table.unpack(currentPath)}
                 table.insert(newPath, nextNode)
                 table.insert(pathQueue, newPath)
             end
         end
     end
-    
     return nil
+end
+
+local function optimizeWaypoints(path, i, player)
+    local furthestIndex = i
+    for j = i + 1, #path do
+        local distance = regions[path[j]] and 
+            dist2(player, randomPointInRegion(regions[path[j]])) or
+            dist2(player, getNodePoint(nodes[path[j]]))
+        if distance >= 8 and distance <= 25 then
+            furthestIndex = j
+        elseif distance > 25 then
+            break
+        end
+    end
+    return furthestIndex
+end
+
+local function doDirectFrenzyWalk(pr, dest)
+    print(string.format("Direct walk %s -> %s", pr, dest))
+    local pt = randomPointInRegion(regions[dest])
+    API.DoAction_Tile(WPOINT.new(pt.x, pt.y, 0))
+    API.RandomSleep2(700, 600, 1800)
+    repeat
+        if not API.Read_LoopyLoop() then return end
+        API.RandomSleep2(200, 100, 100)
+        tracking()
+        local pos = API.PlayerCoord()
+        local dx, dy = pos.x - pt.x, pos.y - pt.y
+    until not API.ReadPlayerMovin2() or (dx*dx + dy*dy <= 36)
+end
+
+local function validateAndCleanPath(fullPath, pr, dest, player)
+    if not fullPath or #fullPath < 2 then
+        print(string.format("[ERROR] No path from %s -> %s", pr, dest))
+        return nil
+    end
+    if #fullPath > 1 and fullPath[1] == pr then
+        table.remove(fullPath, 1)
+    end
+    if #fullPath < 1 then
+        print(string.format("[INFO] No movement needed, already at %s", dest))
+        return nil
+    end
+    if pr == "jellyfish" and #fullPath > 0 and fullPath[1] == "midJunc" then
+        local midPt = getNodePoint(nodes["midJunc"])
+        local dx, dy = player.x - midPt.x, player.y - midPt.y
+        if dx*dx + dy*dy < 81 then
+            table.remove(fullPath, 1)
+            print("[INFO] Skipping midJunc since we're close")
+        end
+    end
+    return #fullPath > 0 and fullPath or nil
 end
 
 local function walkPath(path, startPlayerPos, dest)
@@ -1264,36 +925,25 @@ local function walkPath(path, startPlayerPos, dest)
         print("[INFO] walkPath: Empty path, no movement needed")
         return
     end
-
     local i = 1
     while i <= #path do
-        -- CRITICAL: Check if script should stop
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during walkPath")
-            return 
-        end
-        
         local player = API.PlayerCoord()
         local px, py, pz = player.x, player.y, player.z
         local isFinal = (i == #path)
         local label = isFinal and dest or path[i]
-        
         local shouldSkip = false
         if not isFinal and insideRegion(px, py, regions, path[i], pz) then
             print(string.format("[INFO] walkPath: Already inside %s, skipping to next waypoint", path[i]))
             shouldSkip = true
         end
-        
         if not shouldSkip then
             if not isFinal then
                 local minDistance = 8
                 local maxDistance = 25
                 local furthestIndex = i
-                
                 for j = i + 1, #path do
                     local waypointRegion = regions[path[j]]
                     local distance
-                    
                     if waypointRegion then
                         local randomPt = randomPointInRegion(waypointRegion)
                         distance = dist2(player, randomPt)
@@ -1305,17 +955,14 @@ local function walkPath(path, startPlayerPos, dest)
                             break
                         end
                     end
-                    
                     if distance >= minDistance and distance <= maxDistance then
                         furthestIndex = j
                     elseif distance > maxDistance then
                         break
                     end
                 end
-                
                 if furthestIndex > i then
-                    print(string.format("[INFO] walkPath: Skipping %d waypoints, jumping from %s to %s", 
-                        furthestIndex - i, path[i], path[furthestIndex]))
+                    print(string.format("[INFO] walkPath: Skipping %d waypoints, jumping from %s to %s", furthestIndex - i, path[i], path[furthestIndex]))
                     i = furthestIndex
                     label = path[i]
                     isFinal = (i == #path)
@@ -1324,46 +971,35 @@ local function walkPath(path, startPlayerPos, dest)
                     end
                 end
             end
-            
             local pt
             if regions[path[i]] then
                 local randomPt = randomPointInRegion(regions[path[i]])
                 pt = { x = randomPt.x, y = randomPt.y, z = randomPt.z or 0 }
-                print(string.format("Walking to %s (%d/%d) @ (%.2f,%.2f) [randomPointInRegion] (distance: %.1f)", 
-                    label, i, #path, pt.x, pt.y, dist2(player, pt)))
+                print(string.format("Walking to %s (%d/%d) @ (%.2f,%.2f) [randomPointInRegion] (distance: %.1f)", label, i, #path, pt.x, pt.y, dist2(player, pt)))
             else
                 local nodePt = getNodePoint(nodes[path[i]])
                 pt = { x = nodePt.x, y = nodePt.y, z = nodePt.z or 0 }
-                print(string.format("Walking to %s (%d/%d) @ (%.2f,%.2f) [getNodePoint] (distance: %.1f)", 
-                    label, i, #path, pt.x, pt.y, dist2(player, pt)))
+                print(string.format("Walking to %s (%d/%d) @ (%.2f,%.2f) [getNodePoint] (distance: %.1f)", label, i, #path, pt.x, pt.y, dist2(player, pt)))
             end
-            
             API.DoAction_Tile(WPOINT.new(pt.x, pt.y, pt.z or 0))
             API.RandomSleep2(1200,600,600)
-            
             repeat
                 if not API.Read_LoopyLoop() then 
                     print("[INFO] Script stopping during movement")
                     return 
-                end
-                
-                API.RandomSleep2(100,100,100)
+                end   
+                API.RandomSleep2(100,200,100)
                 tracking()
-
                 local player = API.PlayerCoord()
                 local px, py, pz = player.x, player.y, player.z
                 local isMoving = API.ReadPlayerMovin2()
-
-                if math.random() < 0.2 then  -- 20% chance to log progress
-                    print(string.format("[DEBUG] Movement progress: (%.1f,%.1f) -> target (%.1f,%.1f), moving=%s, distance=%.1f", 
-                        px, py, pt.x, pt.y, tostring(isMoving), dist2(player, pt)))
+                if math.random() < 0.2 then
+                    print(string.format("[DEBUG] Movement progress: (%.1f,%.1f) -> target (%.1f,%.1f), moving=%s, distance=%.1f", px, py, pt.x, pt.y, tostring(isMoving), dist2(player, pt)))
                 end
-
                 local dx, dy, dz = px - pt.x, py - pt.y, pz - pt.z
                 local closeEnough = (dx*dx + dy*dy) <= 36
                 local inCurrentRegion = insideRegion(px, py, regions, path[i], pz)
                 local inDestRegion = isFinal and insideRegion(px, py, regions, dest, pz)
-                    
                 local shouldStop = false
                 if isFinal then
                     if inDestRegion then
@@ -1377,20 +1013,16 @@ local function walkPath(path, startPlayerPos, dest)
                             local y1, y2 = math.min(destRegion.p1.y, destRegion.p2.y), math.max(destRegion.p1.y, destRegion.p2.y)
                             inDestRegionLenient = px >= x1 and px <= x2 and py >= y1 and py <= y2
                         end
-                        
                         if inDestRegionLenient then
                             print(string.format("[WARN] Reached %s with X,Y correct but Z mismatch. Player: (%.1f,%.1f,%d)", dest, px, py, pz))
                             shouldStop = true
                         elseif not API.ReadPlayerMovin2() then
-                            -- Failed to reach endpoint region - don't error, just stop
                             print(string.format("[ERROR] Failed to reach %s. Player pos: (%.1f,%.1f,%d)", dest, px, py, pz))
                             if destRegion then
-                                print(string.format("[ERROR] Target region: X(%.1f-%.1f) Y(%.1f-%.1f) Z(%d-%d)", 
-                                    destRegion.p1.x, destRegion.p2.x, destRegion.p1.y, destRegion.p2.y,
-                                    destRegion.p1.z or 0, destRegion.p2.z or 3))
+                                print(string.format("[ERROR] Target region: X(%.1f-%.1f) Y(%.1f-%.1f) Z(%d-%d)", destRegion.p1.x, destRegion.p2.x, destRegion.p1.y, destRegion.p2.y, destRegion.p1.z or 0, destRegion.p2.z or 3))
                             end
                             print("[ERROR] Stopping movement attempt")
-                            return  -- Return instead of error()
+                            return 
                         end
                     end
                 else
@@ -1402,173 +1034,100 @@ local function walkPath(path, startPlayerPos, dest)
     end
 end
 
-function doMovement()
-    if not API.Read_LoopyLoop() then return end
-
+local function doMovementTo(destinationFunc)
     local player = API.PlayerCoord()
-    local x, y, z   = player.x, player.y, player.z
-    local dest   = normalizeFishName(fishingAction)
-
-    local pr = findPlayerRegion(x, y, z)
-    if not pr and inside(x, y, regions[dest], z) then
-        pr = dest
-    end
-    if not pr then
-        pr = nearestNode(x, y, nodes)
-        print(("[WARN] doMovement: pr was nil, using nearest node '%s'"):format(pr))
-    end
-
+    local x, y, z = player.x, player.y, player.z
+    local dest = destinationFunc()
+    local pr = findPlayerRegion(x, y, z) or (inside(x, y, regions[dest], z) and dest) or nearestNode(x, y, nodes)
     if pr == dest then
-        print(("[INFO] Already at destination: %s"):format(dest))
+        print(string.format("[INFO] Already at destination: %s", dest))
         return
     end
-
-    if (pr=="frenzyN" and dest=="frenzyS") or (pr=="frenzyS" and dest=="frenzyN") then
-        print(("Direct walk %s -> %s"):format(pr, dest))
-        local randomPt = randomPointInRegion(regions[dest])
-        local pt = { x = randomPt.x, y = randomPt.y, z = randomPt.z or 0 }
-        print(("Direct walk point @ (%.2f,%.2f) [randomPointInRegion]"):format(pt.x, pt.y))
-        API.DoAction_Tile(WPOINT.new(pt.x, pt.y, pt.z))
-        API.RandomSleep2(600,600,1800)
-        repeat
-            -- CRITICAL: Check if script should stop
-            if not API.Read_LoopyLoop() then 
-                print("[INFO] Script stopping during direct walk")
-                return 
-            end
-            
-            API.RandomSleep2(100,100,100)
-            tracking()
-        until not API.ReadPlayerMovin2()
-           or (function(p)
-                 local pos = API.PlayerCoord()
-                 local dx, dy = pos.x - p.x, pos.y - p.y
-                 return dx*dx + dy*dy <= 36
-               end)(pt)
+    if (pr == "frenzyN" and dest == "frenzyS") or (pr == "frenzyS" and dest == "frenzyN") then
+        doDirectFrenzyWalk(pr, dest)
         return
     end
-
     local fullPath = find_path(pr, dest)
-    if not fullPath or #fullPath < 2 then
-        print(("[ERROR] No path from %s -> %s"):format(pr, dest))
-        return
+    local cleanPath = validateAndCleanPath(fullPath, pr, dest, player)
+    if cleanPath then
+        print(string.format("[INFO] Walking path: %s", table.concat(cleanPath, " -> ")))
+        walkPath(cleanPath, player, dest)
     end
+end
 
-    if #fullPath > 1 and fullPath[1] == pr then
-        print(("[INFO] Removing starting location '%s' from path (already there)"):format(pr))
-        table.remove(fullPath, 1)
-    end
-
-    if not fullPath or #fullPath < 1 then
-        print(("[INFO] No movement needed, already at or very close to %s"):format(dest))
-        return
-    end
-
-    if pr == "jellyfish" and #fullPath > 0 and fullPath[1] == "midJunc" then
-        local midPt = getNodePoint(nodes["midJunc"])
-        local dx, dy = player.x - midPt.x, player.y - midPt.y
-        if dx*dx + dy*dy < 81 then
-            table.remove(fullPath, 1)
-            print("[INFO] Skipping midJunc since we're already within 9 tiles of it")
-        end
-    end
-
-    if not fullPath or #fullPath < 1 then
-        print(("[INFO] All waypoints removed, already at destination %s"):format(dest))
-        return
-    end
-
-    print(("[INFO] Walking path: %s"):format(table.concat(fullPath, " -> ")))
-    walkPath(fullPath, player, dest)
+local function doMovement()
+    doMovementTo(function() return normalizeFishName(fishingAction) end)
 end
 
 local function doMovementToBanking()
-    if not API.Read_LoopyLoop() then return end
-
-    local player = API.PlayerCoord()
-    local x, y, z = player.x, player.y, player.z
-    local dest   = getBankingRegion(fishingAction, usePorters)
-
-    local pr = findPlayerRegion(x, y, z)
-    if not pr and inside(x, y, regions[dest], z) then 
-        pr = dest
-    end
-    if not pr then
-        pr = nearestNode(x, y, nodes)
-        print(("[WARN] doMovementToBanking: pr was nil, using nearest node '%s'"):format(pr))
-    end
-
-    if pr == dest then
-        print(("[INFO] Already at banking destination: %s"):format(dest))
-        return
-    end
-
-    local fullPath = find_path(pr, dest)
-    if not fullPath or #fullPath < 2 then
-        print(("[ERROR] No path from %s -> %s"):format(pr, dest))
-        return
-    end
-
-    if #fullPath > 1 and fullPath[1] == pr then
-        print(("[INFO] Banking: Removing starting location '%s' from path (already there)"):format(pr))
-        table.remove(fullPath, 1)
-    end
-
-    if not fullPath or #fullPath < 1 then
-        print(("[INFO] Banking: No movement needed, already at %s"):format(dest))
-        return
-    end
-
-    print(("[INFO] Banking path: %s"):format(table.concat(fullPath, " -> ")))
-    walkPath(fullPath, player, dest)  -- Uses the fixed walkPath with loop safety
+    doMovementTo(function() return getBankingRegion(fishingAction, usePorters) end)
 end
 
----------------------------------------------------------------------
--- LEVEL 7: BANKING FUNCTIONS (DEPEND ON LEVEL 1-6) -----------------
----------------------------------------------------------------------
+local function ensureBackToFishing()
+    local dest = normalizeFishName(fishingAction)
+    local pos = API.PlayerCoord()
+    local px, py, pz = pos.x, pos.y, pos.z
+    
+    if not inside(px, py, regions[dest], pz) then
+        print("[WARN] Not in fishing area, returning")
+        doMovement()
+        pos = API.PlayerCoord()
+        if not inside(pos.x, pos.y, regions[dest], pos.z) then
+            print("[ERROR] Failed to return to fishing area")
+            return false
+        end
+    end
+    return true
+end
+
+-- ═════════════════════════════════════════════════════
+--                   BANKING FUNCTIONS                   
+-- ═════════════════════════════════════════════════════
 
 local function interactObject(loc, timeout)
-    print(string.format("[DEBUG] Attempting to interact with object ID %d at (%.1f, %.1f)", loc.id, loc.x, loc.y))
-    
-    local routeName = "Unknown"
-    if loc.route == API.OFF_ACT_GeneralObject_route2 then
-        routeName = "API.OFF_ACT_GeneralObject_route2"
-    elseif loc.route == API.OFF_ACT_GeneralObject_route3 then
-        routeName = "API.OFF_ACT_GeneralObject_route3"
-    elseif loc.route == API.GeneralObject_route_useon then
-        routeName = "API.GeneralObject_route_useon"
-    end
-    
-    print(string.format("[DEBUG] Using action: 0x%x, route: %s", loc.action, routeName))
-    
-    local interactionResult = API.DoAction_Object1(loc.action, loc.route, { loc.id }, 50)
-
-    print(string.format("[DEBUG] Interaction result: %s", tostring(interactionResult)))
-    
-    if not interactionResult then
-        print("[ERROR] Banking interaction failed - DoAction_Object1 returned false")
-        return false
-    end
-    
-    API.RandomSleep2(math.random(1200,2400), 600, math.random(600,1200))
-
-    local start = os.time()
-    repeat
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during banking interaction")
+    timeout = timeout or 15
+    print(string.format("[DEBUG] Interacting with object ID %d at (%.1f, %.1f)", loc.id, loc.x, loc.y))
+    API.DoAction_Object1(loc.action, loc.route, { loc.id }, 50)
+    API.RandomSleep2(math.random(1200, 2400), 600, math.random(600, 1200))
+    local startTime = os.time()
+    while API.ReadPlayerMovin2() do
+        if os.time() - startTime >= timeout then
+            print(string.format("[ERROR] Interaction timed out after %ds", timeout))
             return false 
         end
-        
-        API.RandomSleep2(math.random(100, 200), 50, 50)
+        API.RandomSleep2(math.random(100, 200), 100, 100)
         tracking()
-        
-        if os.time() - start >= timeout then
-            print(("[ERROR] interaction timed out after %ds"):format(timeout))
-            return false  -- Return false instead of stopping script
-        end
-    until not API.ReadPlayerMovin2()
+    end
+    print(string.format("[SUCCESS] Interacted with object ID %d", loc.id))
+    return true
+end
 
-    print("[INFO] deposit interaction complete & movement stopped")
+local function handleGOTEChargingInterface(currentPorters)
+    print(string.format("[DEBUG] Charging GOTE with %d porters", currentPorters))
+    API.DoAction_Interface(0xffffffff, API.GetEquipSlot(2).itemid1, 6, 1464, 15, 2, API.OFF_ACT_GeneralInterface_route2)
+    API.RandomSleep2(math.random(800, 1600), 300, 600)
+    return true
+end
+
+local function handleGOTEChargingConfirmation()
+    if API.VB_FindPSettinOrder(2874).state == 1572882 then
+        API.DoAction_Interface(0xffffffff, 0xffffffff, 0, 847, 22, -1, API.OFF_ACT_GeneralInterface_Choose_option)
+        API.RandomSleep2(math.random(900, 2400), 600, 600)
+    else
+        print("[WARN] No confirmation dialog detected")
+    end
+    return true
+end
+
+local function validateChargingProgress(beforeAmount, beforePorters, afterAmount, afterPorters, requiredAmount)
+    if afterAmount == beforeAmount and afterPorters == beforePorters then
+        print("[ERROR] No progress made in charging attempt")
+        return false
+    end
+    if afterAmount < requiredAmount and afterPorters == 0 then
+        print(string.format("[ERROR] Insufficient porters - still need %d charges", requiredAmount - afterAmount))
+        return false
+    end
     return true
 end
 
@@ -1576,168 +1135,94 @@ local function chargeGOTE()
     if not useGOTE then
         return false
     end
-
     local requiredAmount = getRequiredAmount()
     local currentAmount = getPorterAmount()
-    
-    print("[DEBUG] Charging GOTE - current: " .. currentAmount .. ", required: " .. requiredAmount)
-    
-    local maxAttempts = 5  -- Limit charging attempts
-    local attempts = 0
-
-    while currentAmount < requiredAmount and attempts < maxAttempts do
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during GOTE charging")
-            return false 
-        end
-        
-        attempts = attempts + 1
-        print(string.format("[DEBUG] GOTE charging attempt %d/%d", attempts, maxAttempts))
-        
-        tracking()
-        API.RandomSleep2(200, 100, 100) 
-        
-        local porterCount, porterCharges = howManyPorters()
-        print(string.format("[DEBUG] Available: %d porters (%d charges)", porterCount, porterCharges))
-        
-        if porterCount < 1 then
-            print("[ERROR] No porters available for GOTE charging")
-            return false  -- Return false instead of erroring
-        end
-        
-        local chargesNeeded = requiredAmount - currentAmount
-        if porterCharges < chargesNeeded then
-            print(string.format("[WARN] Insufficient porter charges: need %d, have %d", chargesNeeded, porterCharges))
-            print("[WARN] Will attempt partial charging")
-        end
-        
-        if not AURAS.isEquipmentOpen() then
-            if not AURAS.openEquipment() then 
-                print("[ERROR] Unable to open equipment tab")
-                return false
-            end
-        end
-        
-        if getNecklaceID() == 0 then
-            print("[ERROR] Unable to determine necklace slot")
-            return false
-        end
-        
-        local beforeAmount = getPorterAmount()
-        local beforePorters, beforeCharges = howManyPorters()
-        
-        print(string.format("[DEBUG] Before charging: GOTE=%d, porters=%d (%d charges)", 
-            beforeAmount, beforePorters, beforeCharges))
-        
-        local currentPorters, _ = howManyPorters()
-        local chargeResult = API.DoAction_Interface(0xffffffff,API.GetEquipSlot(2).itemid1,6,1464,15,2,API.OFF_ACT_GeneralInterface_route2)
-        
-        if chargeResult then
-            print("[DEBUG] - Charging grace of the elves with " .. tostring(currentPorters) .. " porters")
-            API.RandomSleep2(math.random(800, 1600), 300, 600)
-        else
-            print("[ERROR] Failed to initiate GOTE charging interface")
-            return false
-        end
-        
-        if API.VB_FindPSettinOrder(2874).state == 1572882 then
-            print("[DEBUG] - Detected confirmation window for recharging grace of the elves")
-            local confirmResult = API.DoAction_Interface(0xFFFFFFFF, 0xFFFFFFFF, 0, 847, 22, -1, API.OFF_ACT_GeneralInterface_Choose_option)
-            if confirmResult then
-                print("[DEBUG] - Selecting yes to confirm using porters")
-                API.RandomSleep2(math.random(1200, 2400), 600, 600)
-            else
-                print("[ERROR] Failed to confirm GOTE charging")
-                return false
-            end
-        else
-            print("[WARN] No confirmation dialog detected")
-        end
-        
-        local afterAmount = getPorterAmount()
-        local afterPorters, afterCharges = howManyPorters()
-        
-        print(string.format("[DEBUG] After charging: GOTE=%d, porters=%d (%d charges)", 
-            afterAmount, afterPorters, afterCharges))
-        
-        if afterAmount == beforeAmount and afterPorters == beforePorters then
-            print("[ERROR] No progress made in charging attempt - interface may have failed")
-            return false
-        end
-        
-        currentAmount = afterAmount
-        print("[DEBUG] - Updated porter amount: " .. currentAmount)
-        
-        if currentAmount < requiredAmount and afterPorters == 0 then
-            print(string.format("[ERROR] Ran out of porters but still need %d more GOTE charges", 
-                requiredAmount - currentAmount))
-            return false
-        end
+    print(string.format("[DEBUG] GOTE charging: %d/%d charges", currentAmount, requiredAmount))
+    if currentAmount >= requiredAmount then
+        print("[DEBUG] GOTE already charged")
+        return true
     end
-    
-    if attempts >= maxAttempts then
-        print(string.format("[ERROR] Failed to charge GOTE after %d attempts", maxAttempts))
+    if not isEquipmentOpen() and not openEquipment() then
+        print("[ERROR] Unable to open equipment tab")
         return false
     end
-    
-    if not AURAS.isBackpackOpen() then
-        if not AURAS.openBackpack() then 
-            print("[ERROR] Failed to re-open the backpack tab")
+    if getNecklaceID() == 0 then
+        print("[ERROR] Unable to determine necklace slot")
+        return false
+    end
+    for attempt = 1, 5 do
+        local porterCount, porterCharges = howManyPorters()
+        if porterCount < 1 then
+            print("[ERROR] No porters available for GOTE charging")
             return false
         end
+        local chargesNeeded = requiredAmount - currentAmount
+        if porterCharges < chargesNeeded then
+            print(string.format("[WARN] Partial charging: need %d, have %d charges", chargesNeeded, porterCharges))
+        end
+        local beforeAmount = getPorterAmount()
+        local beforePorters, beforeCharges = howManyPorters()
+        if not handleGOTEChargingInterface(porterCount) then
+            return false
+        end
+        if not handleGOTEChargingConfirmation() then
+            return false
+        end
+        local afterAmount = getPorterAmount()
+        local afterPorters, afterCharges = howManyPorters()
+        print(string.format("[DEBUG] Attempt %d: %d->%d charges, %d->%d porters", attempt, beforeAmount, afterAmount, beforePorters, afterPorters))
+        if not validateChargingProgress(beforeAmount, beforePorters, afterAmount, afterPorters, requiredAmount) then
+            return false
+        end
+        currentAmount = afterAmount
+        if currentAmount >= requiredAmount then
+            break
+        end
+        API.RandomSleep2(200, 100, 100)
+        tracking()
     end
-    
-    local finalAmount = getPorterAmount()
-    print("[DEBUG] - Successfully charged GOTE to: " .. finalAmount)
-    return finalAmount >= requiredAmount
+    if currentAmount < requiredAmount then
+        handleCriticalError("Failed to charge GOTE after 5 attempts", string.format("Still need %d charges", requiredAmount - currentAmount))
+    end
+    if not isBackpackOpen() and not openBackpack() then
+        print("[ERROR] Failed to re-open backpack tab")
+        return false
+    end
+    print(string.format("[SUCCESS] GOTE charged to %d/%d", currentAmount, requiredAmount))
+    return true
 end
 
 local function depositAtBank()
-    print("[INFO] Going to bank...")
-    
-    doMovementToBanking()
-    tracking()
-    
     local loc = findDepositLocation()
     if not loc then
         error("[ERROR] Could not determine deposit location")
         return false
     end
-    
     print(("Banking at: %s (x=%.1f, y=%.1f)"):format(getBankingRegion(fishingAction, usePorters), loc.x, loc.y))
     print(string.format("[DEBUG] Banking details: ID=%d, action=0x%x", loc.id, loc.action))
-    print(loc.route)
-    
+    doMovementToBanking()
+    tracking()
     local player = API.PlayerCoord()
     local px, py, pz = player.x, player.y, player.z
     local bankingRegion = getBankingRegion(fishingAction, usePorters)
-
     if not insideRegion(px, py, regions, bankingRegion, pz) then
         error("[ERROR] failed to travel to bank")
         return false
     end
-    
     if not interactObject(loc, 15) then 
         error("[ERROR] failed to interact with bank") 
         return false 
     end
-    
-    if not AURAS.maybeEnterPin() then
+    if not maybeEnterPin() then
         error("[ERROR] failed to input bank pin")
-        API.Write_LoopyLoop(false)
         return false
     end
-    
     API.RandomSleep2(math.random(600,1800), 600, math.random(600,1200))
-    
     if useGOTE then
         local currentCharges = getPorterAmount()
         local requiredAmount = getRequiredAmount()
-        
         print("[DEBUG] At bank - GOTE charges: " .. currentCharges .. ", required: " .. requiredAmount)
-        
         if currentCharges < requiredAmount then
-
             local porterCount, totalPorterCharges = howManyPorters()
             if not hasEnoughPortersForGOTE() then
                 print("[ERROR] Insufficient porters in preset for GOTE charging!")
@@ -1747,7 +1232,6 @@ local function depositAtBank()
                 error("[ERROR] Cannot continue without sufficient porters for GOTE")
                 return false
             end
-            
             print("[DEBUG] GOTE needs charging and sufficient porters available")
             if not chargeGOTE() then
                 error("[ERROR] Failed to charge grace of the elves")
@@ -1758,7 +1242,6 @@ local function depositAtBank()
             print("[DEBUG] GOTE charges sufficient, no charging needed")
         end
     end
-    
     if checkPorter(0) and usePorters and not useGOTE then
         local porterId, _ = hasPorter()
         if porterId > 0 then
@@ -1777,18 +1260,14 @@ local function depositAtNet()
         error("[ERROR] Could not determine deposit location")
         return false
     end
-    
     print(("Depositing at net: %s (x=%.1f, y=%.1f)"):format(getBankingRegion(fishingAction, usePorters), loc.x, loc.y))
-
     local beforeCounts = {}
     for _, f in ipairs(FISH_TYPES) do
         local name, _, _, id = unpack(f)
         beforeCounts[name] = id and Inventory:GetItemAmount(id) or 0
     end
-
     doMovementToBanking()
     tracking()
-    
     local player = API.PlayerCoord()
     local px, py, pz = player.x, player.y, player.z
     local bankingRegion = getBankingRegion(fishingAction, usePorters)
@@ -1796,28 +1275,22 @@ local function depositAtNet()
         error("[ERROR] Failed to travel to fishing net")
         return false
     end
-    
     local beforeSpaces = Inventory:FreeSpaces()
     if not interactObject(loc, 15) then
         error("[ERROR] Failed to interact with fishing net")
         return false
     end
-
     API.RandomSleep2(math.random(600,1800), 600, math.random(600,1200))
-
     local afterSpaces = Inventory:FreeSpaces()
     if afterSpaces == beforeSpaces then
         error("[ERROR] No fish were deposited into the fishing net")
-        API.Write_LoopyLoop(false)
         return false
     end
-
     local afterCounts = {}
     for _, f in ipairs(FISH_TYPES) do
         local name, _, _, id = unpack(f)
         afterCounts[name] = id and Inventory:GetItemAmount(id) or 0
     end
-
     local depositGP = 0
     local depositedFishCount = 0
     for _, f in ipairs(FISH_TYPES) do
@@ -1829,32 +1302,27 @@ local function depositAtNet()
                 fishCounts[name] = fishCounts[name] + deposited
                 local gp = deposited * (prices[id] or 0)
                 depositGP = depositGP + gp
-                print(("[DEPOSIT] %dx %s -> %s gp")
-                      :format(deposited, displayName, format_number(gp)))
+                print(("[DEPOSIT] %dx %s -> %s gp"):format(deposited, displayName, format_number(gp)))
             end
         end
     end
-
     totalFish = totalFish + depositedFishCount
-
-    print(("[DEPOSIT] Total deposit value: %s gp; total fish count: %d")
-          :format(format_number(depositGP), totalFish))
+    print(("[DEPOSIT] Total deposit value: %s gp | Total fish count: %d"):format(format_number(depositGP), totalFish))
     tracking()
     updateInventoryBaseline() 
     return true
 end
 
----------------------------------------------------------------------
--- LEVEL 8: GAME STATE & EVENTS (DEPEND ON LEVEL 1-7) ---------------
----------------------------------------------------------------------
+-- ═════════════════════════════════════════════════════
+--                    EVENT FUNCTIONS                    
+-- ═════════════════════════════════════════════════════
 
 local function checkXpIncrease()
     local newXp = API.GetSkillXP("FISHING")
-    if newXp == startXp then
-        error("[ERROR] - No XP increase detected")
-        API.Write_LoopyLoop(false)
+    if newXp == lastIdleXp then
+        handleCriticalError("No XP increase detected during idle check", "Player may be stuck or not actively fishing")
     end
-    startXp = newXp
+    lastIdleXp = newXp 
 end
 
 local function idleCheck()
@@ -1864,492 +1332,419 @@ local function idleCheck()
     end
     if now - afk > randomTime then
         afk = now
+        randomTime = 0
         tracking()
-        
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during idle check")
-            return 
-        end
-        
         API.PIdle1()
         checkXpIncrease()
-        randomTime = 0
     end
 end
 
 local function gameStateChecks()
     local state = API.GetGameState2()
     if state ~= 3 or not API.PlayerLoggedIn() then
-        API.logDebug('[HELP] - Not in-game or logged out')
-        API.Write_LoopyLoop(false)
+        handleCriticalError("Player not in game", string.format("Game state: %d, Logged in: %s", state, tostring(API.PlayerLoggedIn())))
     end
 end
 
-local function checkDialogue()
-    return API.VB_FindPSettinOrder(2874).state == 12
-end
-
-local function checkRequiredLevel() 
-	local reqLevel = levelRequirements[fishingAction]
-	if API.XPLevelTable(API.GetSkillXP("FISHING")) < reqLevel then
-    		error(("Need Fishing level %d for %s"):format(reqLevel, fishingAction))
-	end
-	return API.XPLevelTable(API.GetSkillXP("FISHING")) >= reqLevel
-end
-
-local function checkAnim()
-    return API.ReadPlayerAnim() == 0
-end
-
-function findNPC(objID, objType, distance)
-    local allObjects = API.GetAllObjArray1({ objID }, distance or 30, { objType })
-    return allObjects[1] or false
+local function claimNPC(npcId, npcName)
+    local npc = findNPC(npcId, 1, 30)
+    if not npc then
+        return false
+    end
+    print(string.format("[DEBUG] %s detected - attempting to interact", npcName))
+    API.RandomSleep2(math.random(600, 1800), 600, 1200)
+    return API.DoAction_NPC(0x29, API.OFF_ACT_InteractNPC_route, { npcId }, 50)
 end
 
 local function claimSerenSpirit()
-    if findNPC(26022, 1, 30) then  
-	if API.DoAction_NPC(0x29,API.OFF_ACT_InteractNPC_route,{ 26022 },50) then
-	    print("[DEBUG] - Claiming seren spirit")
-	    API.RandomSleep2(math.random(600, 1800), 600, 1200)
-	    return true
-	end
-    end
-    return false
+    return claimNPC(26022, "Seren Spirit")
 end
 
 local function claimDivineBlessing()
-    if findNPC(27228, 1, 30) then  
-	if API.DoAction_NPC(0x29,API.OFF_ACT_InteractNPC_route,{ 27228 },50) then
-	    print("[DEBUG] - Claiming divine blessing")
-	    API.RandomSleep2(math.random(600, 1800), 600, 1200)
-	    return true
-	end
+    return claimNPC(27228, "Divine Blessing")
+end
+
+local function handleMessageInBottle(itemId, successMsg)
+    local bottleOpened = false
+    for attempt = 1, 10 do
+        tracking()
+        local vb_state = API.VB_FindPSettinOrder(2874).state
+        if (vb_state == 0 and bottleOpened) or not Inventory:Contains(itemId) then
+            print("[DEBUG] - " .. successMsg)
+            return true
+        end
+        if vb_state == 12 then
+            API.DoAction_Interface(0xffffffff, 0xffffffff, 0, 1186, 8, -1, API.OFF_ACT_GeneralInterface_Choose_option)
+            API.RandomSleep2(600, 600, 600)
+            bottleOpened = true
+        elseif vb_state == 18 then
+            API.DoAction_Interface(0xffffffff, 0xffffffff, 0, 751, 66, -1, API.OFF_ACT_GeneralInterface_Choose_option)
+            API.RandomSleep2(600, 600, 600)
+            bottleOpened = true
+        elseif vb_state == 0 and not bottleOpened then
+            API.DoAction_Inventory1(itemId, 0, 1, API.OFF_ACT_GeneralInterface_route)
+            API.RandomSleep2(600, 600, 600)
+        else
+            API.RandomSleep2(600, 600, 600)
+        end
     end
+    error("[ERROR] - Unable to process message in a bottle after 10 attempts")
     return false
+end
+
+local function handleStandardRandomEvent(itemId, successMsg)
+    for attempt = 1, 20 do
+        if API.VB_FindPSettinOrder(2874).state == 1572882 then
+            break
+        end
+        API.DoAction_Inventory1(itemId, 0, 1, API.OFF_ACT_GeneralInterface_route)
+        API.RandomSleep2(800, 600, 600)
+    end
+    API.DoAction_Interface(0xffffffff, 0xffffffff, 0, 847, 22, -1, API.OFF_ACT_GeneralInterface_Choose_option)
+    API.RandomSleep2(800, 600, 600)
+    local finalState = API.VB_FindPSettinOrder(2874).state
+    if finalState ~= 1572882 then
+        print("[DEBUG] - " .. successMsg)
+        return true
+    else
+        print("[ERROR] - Unable to process random event: state still " .. tostring(finalState))
+        return false
+    end
 end
 
 local function handleRandomEvent(itemId, startMsg, successMsg)
     if not watchRandoms or not Inventory:Contains(itemId) then
         return true
     end
-    API.logInfo("[HELP] - " .. startMsg)
-   
+    print("[DEBUG] - " .. startMsg)
     if itemId == 42282 then
-        local maxAttempts = 10
-        local attempts = 0
-        local bottleOpened = false
-        
-        while attempts < maxAttempts do
-
-            if not API.Read_LoopyLoop() then 
-                print("[INFO] Script stopping during random event handling")
-                return false 
-            end
-            
-            tracking()
-            local vb_state = API.VB_FindPSettinOrder(2874).state
-            
-            if vb_state == 0 and bottleOpened then
-                API.logInfo("[HELP] - " .. successMsg)
-                return true
-                
-            elseif vb_state == 12 then
-                API.DoAction_Interface(0xffffffff, 0xffffffff, 0, 1186, 8, -1, API.OFF_ACT_GeneralInterface_Choose_option)
-                API.RandomSleep2(600, 600, 600)
-                bottleOpened = true
-                
-            elseif vb_state == 18 then
-                API.DoAction_Interface(0xffffffff,0xffffffff,0,751,66,-1,API.OFF_ACT_GeneralInterface_Choose_option)
-                API.RandomSleep2(600, 600, 600)
-                bottleOpened = true
-                
-            elseif vb_state == 0 and not bottleOpened then
-                API.DoAction_Inventory1(itemId, 0, 1, API.OFF_ACT_GeneralInterface_route)
-                API.RandomSleep2(
-                    math.random(600, 2 * 600),
-                    math.random(100, 400),
-                    math.random(100, 600)
-                )
-            else
-                API.RandomSleep2(600, 600, 600)
-            end
-            
-            if not Inventory:Contains(itemId) then
-                API.logInfo("[HELP] - " .. successMsg)
-                return true
-            end
-            
-            attempts = attempts + 1
-        end
-        
-        API.logInfo("[ERROR] - Unable to process message in a bottle after " .. maxAttempts .. " attempts")
-        return false
-    end
-    
-    local safetyCounter = 0
-    local maxSafetyAttempts = 20  -- Prevent infinite loops
-    
-    while API.VB_FindPSettinOrder(2874).state ~= 1572882 and safetyCounter < maxSafetyAttempts do
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during random event processing")
-            return false 
-        end
-        
-        API.DoAction_Inventory1(itemId, 0, 1, API.OFF_ACT_GeneralInterface_route)
-        API.RandomSleep2(
-            math.random(600, 3 * 600),
-            math.random(100, 400),
-            math.random(100, 600)
-        )
-        safetyCounter = safetyCounter + 1
-    end
-    
-    if safetyCounter >= maxSafetyAttempts then
-        API.logInfo("[ERROR] - Random event processing timed out after " .. maxSafetyAttempts .. " attempts")
-        return false
-    end
-    
-    API.DoAction_Interface(
-        0xffffffff, 0xffffffff, 0,
-        847, 22, -1,
-        API.OFF_ACT_GeneralInterface_Choose_option
-    )
-    API.RandomSleep2(
-        math.random(600, 3 * 600),
-        math.random(100, 400),
-        math.random(100, 600)
-    )
-    local finalState = API.VB_FindPSettinOrder(2874).state
-    if finalState ~= 1572882 then
-        API.logInfo("[HELP] - " .. successMsg)
-        return true
+        return handleMessageInBottle(itemId, successMsg)
     else
-        API.logInfo("[ERROR] - Unable to process random event: state still " .. tostring(finalState))
-        return false
+        return handleStandardRandomEvent(itemId, successMsg)
     end
-end
-
-local function augmentedReached()
-    local container = API.Container_Get_all(94)
-    if not container or not container[4] or not container[4].Extra_ints or not container[4].Extra_ints[2] then
-        return false
-    end
-    
-    local itemXp = container[4].Extra_ints[2]
-    local itemLevel = GetItemLevel(itemXp)
-    
-    return itemLevel >= alertItemLevel
-end
-
-local function interactingWithElectrified()
-    if API.ReadLpInteracting().Name == "Electrifying blue blubber jellyfish" or API.ReadLpInteracting().Name == "Electrifying green blubber jellyfish" then
-	print("[DEBUG] - Interacting with an electrified fishing spot")
-	return true
-    end
-    return false
-end
-
-local function interactingNonSwiftWithSwiftAvail()
-    if API.ReadLpInteracting().Name == "Sailfish" and normalizeFishName(fishingAction) == "sailfish" then
-	if #API.GetAllObjArray1({25222}, 50, {1}) > 0 then
-	    print("[DEBUG] - Interacting with a regular sailfish spot but a swift sailfish is available")
-	    return true
-	end
-    end
-    return false
 end
 
 local function processRandomEvents()
     for _, ev in ipairs(RANDOM_EVENTS) do
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during random event processing")
-            return false 
-        end
-        
         local itemId, startMsg, successMsg = unpack(ev)
         if not handleRandomEvent(itemId, startMsg, successMsg) then
-            error("[WARN] Failed to handle random event")
-            API.Write_LoopyLoop(false)  
-            return false
+            handleCriticalError("Failed to handle fishing random event", string.format("Interaction failed for item ID %d: %s", itemId, startMsg))
         end
     end
     return true
 end
 
----------------------------------------------------------------------
--- LEVEL 9: FISHING FUNCTIONS (DEPEND ON LEVEL 1-8) -----------------
----------------------------------------------------------------------
+local function handleEventProcessingAndCleanup()
+    if not processRandomEvents() then
+        handleCriticalError("Failed to process random events", "Random event processing returned false - check inventory")
+    end
+    if claimSerenSpirit() then
+        print("[SUCCESS] Claimed Seren Spirit")
+    end
+    if claimDivineBlessing() then
+        print("[SUCCESS] Claimed Divine Blessing")
+    end
+    tracking()
+    return true
+end
+
+-- ═════════════════════════════════════════════════════
+--                   FISHING FUNCTIONS                   
+-- ═════════════════════════════════════════════════════
+
+local function augmentedReached()
+    local container = API.Container_Get_all(94)
+    local itemXp = container and container[4] and container[4].Extra_ints and container[4].Extra_ints[2]
+    return itemXp and GetItemLevel(itemXp) >= alertItemLevel or false
+end
+
+local function shouldReinteractWithSpot()
+    local interacting = API.ReadLpInteracting()
+    if not interacting or not interacting.Name then
+        return false
+    end
+    local name = interacting.Name
+    if name == "Electrifying blue blubber jellyfish" or name == "Electrifying green blubber jellyfish" then
+        print("[DEBUG] - Interacting with an electrified fishing spot")
+        return true
+    end
+    if name == "Sailfish" and normalizeFishName(fishingAction) == "sailfish" then
+        if #API.GetAllObjArray1({25222}, 50, {1}) > 0 then
+            print("[DEBUG] - Interacting with a regular sailfish spot but a swift sailfish is available")
+            return true
+        end
+    end
+    return false
+end
 
 local function tryFishingAction()
-    local key
-    if fishingAction == "bluejellyfish" then
-        key = "bluejellyfish"
-    elseif fishingAction == "greenjellyfish" then
-        key = "greenjellyfish"
-    else
-        key = normalizeFishName(fishingAction)
-    end
-
+    local key = fishingAction == "bluejellyfish" and "bluejellyfish" or
+                fishingAction == "greenjellyfish" and "greenjellyfish" or normalizedAction
     local ids = npcIds[key]
     if not ids then
         print("[tryFishingAction] no NPC IDs for:", key)
-        return
+        return false
     end
-
     for _, id in ipairs(ids) do
         local npcs = API.GetAllObjArray1({id}, 50, {1})
-        if not npcs or #npcs == 0 then
-            print(string.format("[tryFishingAction] no NPCs found for ID %d", id))
-        else
-            for idx, npc in ipairs(npcs) do
-            	local actionName = tostring(npc.Action)
-
-    		if (normalizeFishName(fishingAction) == "frenzyN" or normalizeFishName(fishingAction) == "frenzyS") and actionName ~= "Fling" then
-			print(string.format("[SKIP] id = %d @ (x = %.1f, y = %.1f)", npc.Id, npc.Tile_XYZ.x, npc.Tile_XYZ.y))
-          		goto continue
-    		end
-		local playerPos = API.PlayerCoordfloat()
-    		local x, y = npc.Tile_XYZ.x, npc.Tile_XYZ.y
-    		local dist = math.sqrt((x - playerPos.x)^2 + (y - playerPos.y)^2)
-    		if dist <= 50 then
-        		return API.DoAction_NPC(0x3c, API.OFF_ACT_InteractNPC_route, { npc.Id }, 50)
-    		end
-		::continue::
+        if npcs and #npcs > 0 then
+            for _, npc in ipairs(npcs) do
+                if not isFrenzyAction or tostring(npc.Action) == "Fling" then
+                    return API.DoAction_NPC(0x3c, API.OFF_ACT_InteractNPC_route, { npc.Id }, 50)
+                end
             end
         end
     end
-end
-
-local function ensureBackToFishing()
-    local dest = normalizeFishName(fishingAction)
-    local pos  = API.PlayerCoord()
-    local px, py, pz = pos.x, pos.y, pos.z 	
-    
-    print(string.format("[DEBUG] ensureBackToFishing: Player at (%.1f, %.1f, %d), checking region '%s'", px, py, pz, dest))
-    
-    if not inside(px, py, regions[dest], pz) then
-    	print("[WARN] Not in fishing area, attempting to return")
-    	local targetRegion = regions[dest]
-    	if targetRegion then
-    	    print(string.format("[DEBUG] Target region: X(%.1f-%.1f) Y(%.1f-%.1f) Z(%d-%d)", 
-    	        targetRegion.p1.x, targetRegion.p2.x, 
-    	        targetRegion.p1.y, targetRegion.p2.y,
-    	        targetRegion.p1.z or 0, targetRegion.p2.z or 3))
-    	end
-    	
-    	doMovement()  -- Uses the fixed doMovement with loop safety
-
-    	pos = API.PlayerCoord()
-    	px, py, pz = pos.x, pos.y, pos.z  
-    	print(string.format("[DEBUG] After movement: Player at (%.1f, %.1f, %d)", px, py, pz))
-    	
-    	if not inside(px, py, regions[dest], pz) then
-            print("[ERROR] Still outside fishing area after movement")
-            print(string.format("[ERROR] Player position: (%.1f, %.1f, %d)", px, py, pz))
-            print(string.format("[ERROR] Expected region '%s'", dest))
-            return false  -- Return false instead of stopping script
-        end
-    end
-
-    return true
+    return false
 end
 
 local function doAndAwaitAnim(interactFn, description, timeoutSec)
-    print(("[DEBUG] - %s"):format(description))
-
+    print(string.format("[DEBUG] - %s", description))
     if not interactFn() then
-        print(("[ERROR] - %s interaction failed"):format(description))
+        print(string.format("[ERROR] - %s interaction failed", description))
         return false
     end
-
-    if (normalizeFishName(fishingAction) == "frenzyS" or normalizeFishName(fishingAction) == "frenzyN") and 
-       description == "Trying fishing action" then
+    if isFrenzyAction and description == "Trying fishing action" then
         waitingForFrenzyCompletion = true
-        print("[DEBUG] - Set waiting for frenzy completion")
+        print("[DEBUG] - Waiting for frenzy completion")
     end
-
-    local accumulated = 0
-    local lastTime    = API.ScriptRuntime()
-
+    local nonMovingTime, lastTime = 0, API.ScriptRuntime()
     repeat
-        -- CRITICAL: Check if script should stop
-        if not API.Read_LoopyLoop() then 
-            print("[INFO] Script stopping during animation wait")
-            return false 
-        end
-        
-        API.RandomSleep2(100,100,100)
+        API.RandomSleep2(200, 100, 100)
         tracking()
-
         local now = API.ScriptRuntime()
-        local dt  = now - lastTime
-
         if not API.ReadPlayerMovin2() then
-            accumulated = accumulated + dt
+            nonMovingTime = nonMovingTime + (now - lastTime)
+            if nonMovingTime > timeoutSec then
+                print(string.format("[ERROR] - %s: timeout after %ds", description, timeoutSec))
+                return false
+            end
         end
-
         lastTime = now
-
-        if accumulated > timeoutSec then
-            print(("[ERROR] - %s: no animation within %d seconds of non-moving time, giving up")
-                  :format(description, timeoutSec))
-            return false  -- Return false instead of error()
-        end
     until API.ReadPlayerAnim() ~= 0
-
-    print(("[DEBUG] - Animation for %s started after %.2f seconds of non-moving wait.")
-          :format(description, accumulated))
+    print(string.format("[DEBUG] - Animation started after %.2fs", nonMovingTime))
     return true
 end
 
----------------------------------------------------------------------
--- MAIN LOOP --------------------------------------------------------
----------------------------------------------------------------------
-if not isInDeepSeaHub() then
-    error("[ERROR] Please move to the Deep Sea Fishing area and restart the script.")
-    API.Write_LoopyLoop(false)
-end
-
-if not checkRequiredLevel() then
-    API.Write_LoopyLoop(false)
-end
-
-if useGOTE and not usePorters then
-    error("ERROR: useGOTE requires usePorters to be true. GOTE needs porters to charge itself.\n" ..
-          "Either set usePorters = true, or set useGOTE = false.")
-end
-
-clearAllFishData()
-resetScriptVariables()
-
-while API.Read_LoopyLoop() do
-    gameStateChecks()
-
-    local actionClean = normalizeFishName(fishingAction)
-    local destination = normalizeFishName(fishingAction)
+local function handleFishingInteractions()
     local player = API.PlayerCoord()
-    local px, py, pz = player.x, player.y, player.z
-	
-    if actionClean ~= "frenzyS"
-    and actionClean ~= "frenzyN"
-    and actionClean ~= "minnows" then
-        
+    local targetRegion = normalizedAction
+    if not regions[targetRegion] then
+        handleCriticalError("Invalid fishing destination", string.format("No region defined for fishing action '%s'", fishingAction))
+    end
+    if not inside(player.x, player.y, regions[targetRegion], player.z) then
+        local currentRegion = findPlayerRegion(player.x, player.y, player.z) or "Unknown"
+        print(string.format("[INFO] Moving from '%s' to '%s'", currentRegion, targetRegion))
+        doMovement()
+        local newPlayer = API.PlayerCoord()
+        if not inside(newPlayer.x, newPlayer.y, regions[targetRegion], newPlayer.z) then
+            handleCriticalError("Failed to reach fishing area", string.format("Movement failed: %s -> %s", currentRegion, targetRegion))
+        end
+        print(string.format("[SUCCESS] Moved to fishing area: '%s'", targetRegion))
+    end
+    if checkDialogue() and normalizedAction == "swarm" then
+        print("[DEBUG] Swarm dialogue detected - attempting net snagging")
+        local result = doAndAwaitAnim(
+            function()
+                return API.DoAction_NPC(0x3c, API.OFF_ACT_InteractNPC_route, {25220}, 50)
+            end,
+            "Snagging net @ swarm spot", 20
+        )
+        if not result then
+            handleCriticalError("Swarm fishing failed", "doAndAwaitAnim returned false for swarm snag")
+        end
+        recordFishTime()
+        return true
+    end
+    if (checkAnim() and not checkDialogue()) or shouldReinteractWithSpot() then
+        local interacting = API.ReadLpInteracting()
+        local interactionType = "regular fishing"
+        if interacting and interacting.Name then
+            if interacting.Name:find("Electrifying") then
+                interactionType = "electrified spot"
+            elseif interacting.Name == "Sailfish" then
+                interactionType = "swift sailfish optimization"
+            end
+        end
+        print(string.format("[DEBUG] Starting %s for '%s'", interactionType, fishingAction))
+        local result = doAndAwaitAnim(tryFishingAction, "Trying fishing action", 20)
+        if not result then
+            handleCriticalError("Fishing action failed", string.format("%s '%s' returned false", interactionType, fishingAction))
+        end
+        recordFishTime()
+        return true
+    end
+    return false
+end
+
+-- ═════════════════════════════════════════════════════
+--                 INVENTORY MANAGEMENT                 
+-- ═════════════════════════════════════════════════════
+
+local function handleInventoryManagement()
+    if actionClean == "frenzyS" or actionClean == "frenzyN" or actionClean == "minnows" then
+        return
+    end
     if usePorters then
-    if useGOTE then
-        local chargingThreshold = getGOTEChargingThreshold()
-        local needsCharging = checkPorter(chargingThreshold)
-        
-        if needsCharging then
-            if hasEnoughPortersForGOTE() then
-                if not chargeGOTE() then
-    		    print("[ERROR] Failed to charge grace of the elves - going to bank for more porters")
-    		    if not depositAtBank() then
-    		        print("[ERROR] Failed to deposit at bank for porter restocking")
-    		        goto continue
-    		    end
-    		    if not ensureBackToFishing() then
-    		        print("[ERROR] Failed to return to fishing area")
-    		        goto continue
-    		    end
-    		    goto continue
-		end
-            else
-                if canBankForPorters() then
-                    print("[INFO] GOTE needs charging but insufficient porters - going to bank")
-                    if not depositAtBank() then
-                        print("[ERROR] Failed to restock porters for GOTE")
-                        goto continue
+        if useGOTE then
+            local chargingThreshold = getGOTEChargingThreshold()
+            local needsCharging = checkPorter(chargingThreshold)
+            if needsCharging then
+                if hasEnoughPortersForGOTE() then
+                    if not chargeGOTE() then
+                        print("[INFO] GOTE charging failed - banking for more porters")
+                        if not depositAtBank() then
+                            handleCriticalError("Banking failed during GOTE restocking", "depositAtBank() returned false")
+                        end
+                        if not ensureBackToFishing() then
+                            handleCriticalError("Failed to return to fishing area after banking", "ensureBackToFishing() returned false")
+                        end
                     end
-                    if not ensureBackToFishing() then
-                        print("[ERROR] Failed to return to fishing area after restocking")
-                        goto continue
-                    end
-                    goto continue
                 else
-                    local bankingRegion = getBankingRegion(fishingAction, usePorters)
-                    print("[ERROR] GOTE needs charging but insufficient porters available")
-                    print("[ERROR] Current fishing location uses net banking, cannot restock porters")
-                    print("[ERROR] Please manually move to a location with porter banking or disable GOTE")
-                    print("[ERROR] Insufficient porters for GOTE and cannot restock automatically")
-                    goto continue  -- Continue instead of error
+                    if canBankForPorters() then
+                        print("[INFO] GOTE needs charging - banking for porters")
+                        if not depositAtBank() then
+                            handleCriticalError("Banking failed during porter restocking", "depositAtBank() returned false")
+                        end
+                        if not ensureBackToFishing() then
+                            handleCriticalError("Failed to return to fishing area after banking", "ensureBackToFishing() returned false")
+                        end
+                    else
+                        handleCriticalError("GOTE requires porters but cannot restock at current location", string.format("Activity '%s' uses net banking which doesn't support porter restocking", fishingAction))
+                    end
+                end
+            end
+        else
+            local needsPorter = checkPorter(0)
+            if needsPorter then  
+                local porterId, porterChargeValue = hasPorter()
+                if porterId > 0 then
+                    print(string.format("[DEBUG] Activating porter ID %d (%d charges)", porterId, porterChargeValue))
+                    API.DoAction_Inventory1(porterId, 0, 2, API.OFF_ACT_GeneralInterface_route)
+                    API.RandomSleep2(math.random(600, 1800), 600, 330)
+                else
+                    if canBankForPorters() then
+                        print("[INFO] No porters available - banking for restock")
+                        if not depositAtBank() then
+                            handleCriticalError("Banking failed during porter restock", "depositAtBank() returned false")
+                        end
+                        if not ensureBackToFishing() then
+                            handleCriticalError("Failed to return to fishing area after banking", "ensureBackToFishing() returned false")
+                        end
+                    else
+                        handleCriticalError("No porters available and cannot restock at current location", string.format("Activity '%s' requires porters but current location only supports net banking", fishingAction))
+                    end
                 end
             end
         end
     else
-        local needsPorter = checkPorter(0)
-        
-        if needsPorter then  
-            local porterId, porterChargeValue = hasPorter()
-            
-            if porterId > 0 then
-                API.DoAction_Inventory1(porterId, 0, 2, API.OFF_ACT_GeneralInterface_route)
-                API.RandomSleep2(math.random(600,1800), 600, 330)
-            else
-                if not depositAtBank() then
-                    print("[ERROR] Failed to deposit at bank")
-                    goto continue
-                end
-                if not ensureBackToFishing() then
-                    print("[ERROR] Failed to return to fishing area")
-                    goto continue
-                end
-                goto continue
+        if Inventory:FreeSpaces() == 0 then
+            print("[INFO] Inventory full - depositing at fishing net")
+            if not depositAtNet() then
+                handleCriticalError("Net deposit failed", "depositAtNet() returned false")
+            end
+            if not ensureBackToFishing() then
+                handleCriticalError("Failed to return to fishing area after net deposit", "ensureBackToFishing() returned false")
             end
         end
     end
-    elseif not usePorters and Inventory:FreeSpaces() == 0 then
-	if not depositAtNet() then
-	    print("[ERROR] Failed to deposit at fishing net")
-	    goto continue
-	end
-	if not ensureBackToFishing() then
-	    print("[ERROR] Failed to return to fishing area")
-	    goto continue
-	end
-	goto continue
-    end
-    end 
+end
 
-    if whichAura and whichAura ~= "" and AURAS.auraTimeRemaining() <= AURAS.auraRefreshTime then
-        AURAS.activateAura(whichAura)
-        API.RandomSleep2(math.random(600, 1200), 1200, math.random(300, 600))
-        API.DoAction_Interface(0xc2, 0xffffffff, 1, 1431, 0, 9, API.OFF_ACT_GeneralInterface_route)
-    end
+-- ═════════════════════════════════════════════════════
+--                   RESET FUNCTIONS                   
+-- ═════════════════════════════════════════════════════
 
+local function resetFishTrackingVariables()
+    fishCounts, prevFishCounts = {}, {}
+    for _, f in ipairs(FISH_TYPES) do
+        fishCounts[f[1]] = 0
+        prevFishCounts[f[1]] = 0
+    end
+    totalFish, lastChatCount = 0, 0
+    frenzyInteractions = 0
+    waitingForFrenzyCompletion = false
+    minnowInteractions = 0
+    lastKnownMinnowCount = Inventory:GetItemAmount(42241) or 0
+    lastFishCaught = API.ScriptRuntime()
+    lastKnownFishCount = 0
+end
+
+local function resetPorterTrackingVariables()
+    portersUsed = 0
+    lastPorterBuffAmount = 0
+    buffTrackingInitialized = false
+    currentGOTEThreshold = 0
+    lastPorterInventoryState = ""
+end
+
+local function resetStatisticsVariables()
+    startXp = API.GetSkillXP("FISHING")
+    lastDisplayedValues = {
+        totalFish = 0, xpGained = 0, gpEarned = 0, porterCharges = 0,
+        porterCount = 0, totalCharges = 0, portersUsed = 0, inventorySpaces = 0,
+        playerAnim = 0, playerMoving = false, currentRegion = "", playerX = 0, playerY = 0,
+        inventoryHash = "", timeSinceActionSeconds = 0, timeSinceFishSeconds = 0,
+        auraTimeMinutes = 0, runtimeMinutes = 0
+    }
+    configurationDisplayed = false
+    lastConfigState = ""
+end
+
+local function resetScriptVariables()
+    print("[INFO] Resetting script variables")
+    startingInventory = {}
+    for _, f in ipairs(FISH_TYPES) do
+        local name, _, _, id = unpack(f)
+        startingInventory[name] = id and Inventory:GetItemAmount(id) or 0
+    end
+    resetFishTrackingVariables()    
+    resetPorterTrackingVariables()  
+    resetStatisticsVariables()      
+    lastIdleXp = API.GetSkillXP("FISHING")
+    lastFishTime = API.ScriptRuntime()
+    afk = API.ScriptRuntime()
+    randomTime = 0
+end
+
+-- ═════════════════════════════════════════════════════
+--                 INITIALIZATION FUNCTIONS                 
+-- ═════════════════════════════════════════════════════
+
+local function initializeScript()
+    print("[INFO] Starting input validation")
+    if not validActions[fishingAction] then
+        handleCriticalError("Invalid fishing action specified", string.format("'%s' is not valid. Must be one of: sailfish, minnows, frenzyS, frenzyN, swarm, bluejellyfish, greenjellyfish", fishingAction))
+    end
+    if not isInDeepSeaHub() then
+        handleCriticalError("Player not in Deep Sea Fishing area", "Please move to the Deep Sea Fishing hub and restart the script")
+    end
+    if not checkRequiredLevel() then
+        handleCriticalError("Insufficient fishing level", string.format("Need level %d for %s", levelRequirements[fishingAction], fishingAction))
+    end
+    if useGOTE and not usePorters then
+        handleCriticalError("Invalid GOTE configuration", "useGOTE requires usePorters=true. GOTE needs porters to charge itself")
+    end
+    resetScriptVariables()
+    actionClean = normalizeFishName(fishingAction)
+    normalizedAction = normalizeFishName(fishingAction)
+    isFrenzyAction = normalizedAction == "frenzyS" or normalizedAction == "frenzyN"
+    print("[DEBUG] Script setup completed")
+end
+
+-- ═════════════════════════════════════════════════════
+--                      MAIN LOOP                      
+-- ═════════════════════════════════════════════════════
+
+API.Write_fake_mouse_do(false)
+initializeScript()
+
+while API.Read_LoopyLoop() do
+    gameStateChecks()
+    handleInventoryManagement()
+    handleAuraManagement()
     idleCheck()
     findChatText()
-
-    if not inside(px, py, regions[destination], pz) then
-      	doMovement()
-    end
-
-    if checkDialogue() and normalizeFishName(fishingAction) == "swarm" then
-        if doAndAwaitAnim(
-             function()
-                 return API.DoAction_NPC(0x3c, API.OFF_ACT_InteractNPC_route, {25220}, 50)
-             end,
-             "Snagging net @ swarm spot",
-             20
-           )
-        then
-            recordFishTime()
-        end
-
-    elseif (checkAnim() and not checkDialogue())
-    or interactingWithElectrified()
-    or interactingNonSwiftWithSwiftAvail()
-    then
-    	if doAndAwaitAnim(tryFishingAction, "Trying fishing action", 20) then
-        	recordFishTime()
-    	end
-    end
-
-    ::continue::
-    processRandomEvents()
-    claimSerenSpirit()
-    claimDivineBlessing()
-
-    tracking()
-    
-    API.RandomSleep2(math.random(300, 500), 100, math.random(600, 2400))
+    handleFishingInteractions()
+    handleEventProcessingAndCleanup()
+    API.RandomSleep2(math.random(300, 500), 100, 600)
 end
