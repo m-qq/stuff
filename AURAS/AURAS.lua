@@ -10,11 +10,11 @@
 
 local AURAS = {}
 local API   = require("api")
-AURAS.noResets = false
-AURAS.yourbankpin  = 0000
-AURAS.refreshEarly = false
+AURAS.noResets = false  -- do not change
+AURAS.yourbankpin  = 0000 -- set this value from your script using AURAS.pin(1234)
+AURAS.refreshEarly = false -- can modify for early refreshing aura (not many applications) recommended false
 
-AURAS.minRefresh = 15
+AURAS.minRefresh = 15  -- settings related to refreshEarly, generally not used
 AURAS.maxRefresh = 120
 
 if AURAS.refreshEarly then
@@ -23,7 +23,7 @@ else
     AURAS.auraRefreshTime = 0
 end
 
-API.Write_fake_mouse_do(false)
+API.Write_fake_mouse_do(false)  -- can remove if you call this in your script
 
 AURAS.auraActions = {
     oddball                 = {row=0,  addr=0x51dd, id=20957, resetTypes={1}},
