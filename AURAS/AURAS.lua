@@ -5,6 +5,7 @@
 	* autoExtened optional param added to activateAura()
 	* true/false, automatically extend the aura if available
 	* AURAS.isBackpackOpen() check after aura activation, re-opens if false
+	* pulled AURAS.minRefresh and AURAS.maxRefresh out for easy access
 ]]
 
 local AURAS = {}
@@ -13,8 +14,11 @@ AURAS.noResets = false
 AURAS.yourbankpin  = 0000
 AURAS.refreshEarly = false
 
+AURAS.minRefresh = 15
+AURAS.maxRefresh = 120
+
 if AURAS.refreshEarly then
-    AURAS.auraRefreshTime = math.random(15, 120)
+    AURAS.auraRefreshTime = math.random(AURAS.minRefresh, AURAS.maxRefresh)
 else
     AURAS.auraRefreshTime = 0
 end
@@ -625,7 +629,7 @@ function AURAS.activateAura(auraName, autoExtend)
 	if ok then
 		print(string.format("[DEBUG] manageAura success for '%s'", auraName))
 		if AURAS.refreshEarly then
-			AURAS.auraRefreshTime = math.random(15, 120)
+			AURAS.auraRefreshTime = math.random(AURAS.minRefresh, AURAS.maxRefresh)
 		end
 		if not AURAS.isBackpackOpen() then
 			print("[DEBUG] Opening backpack tab after aura activation returned true")
