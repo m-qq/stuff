@@ -1,13 +1,10 @@
 --[[
-    AURAS.lua [1.01]
-	Last update: 06/27/25 by <@600408294003048450>
-        * add AURAS.isEquipmentOpen() 			(function)
-	* add AURAS.isAuraManagementOpen() 		(function)
-	* add AURAS.deactivateAura() 			(function)
-	* add checks for AURAS.noResets 		(variable)
-	* add AURAS.auraTimeRemaining() 		(function)
-	* add passing bankpin via AURAS.pin(bankPin) 	(function)
-	* add AURAS.auraRefreshTime 			(variable)
+    AURAS.lua [1.02]
+	Last update: 07/03/25 by <@600408294003048450>
+        * autoExtend optional param added to manageAura()
+	* autoExtened optional param added to activateAura()
+	* true/false, automatically extend the aura if available
+	* AURAS.isBackpackOpen() check after aura activation, re-opens if false
 ]]
 
 local AURAS = {}
@@ -23,10 +20,6 @@ else
 end
 
 API.Write_fake_mouse_do(false)
-
--- to add auraActions, find aura ID.. ex 22300 for penance
--- convert 22300 decimal to hex -> addr = 571C (verify in table penance addr == 0x571c)
--- add more mappings as needed
 
 AURAS.auraActions = {
     oddball                 = {row=0,  addr=0x51dd, id=20957, resetTypes={1}},
@@ -186,6 +179,24 @@ function AURAS.verifyAuras(auraDefs)
     return mismatches
 end
 
+function AURAS.isBackpackOpen()
+	return API.VB_FindPSettinOrder(3039).state == 1
+end
+
+function AURAS.openBackpack()
+    for i = 1, 3 do
+	if AURAS.isBackpackOpen() then
+		print(string.format("[AURA] Backpack tab opened on try %d", i))
+		return true
+	end
+	print(string.format("[AURA] Opening Backpack tab (try %d)", i))
+	API.DoAction_Interface(0xc2,0xffffffff,1,1431,0,9,API.OFF_ACT_GeneralInterface_route)
+        API.RandomSleep2(math.random(600,1800), 400, 200)
+    end
+    error("[ERROR] Unable to open Backpack tab")
+    return false
+end
+
 function AURAS.isEquipmentOpen()
 	return API.VB_FindPSettinOrder(3074).state == 1
 end
@@ -221,7 +232,7 @@ function AURAS.openAuraWindow()
 		return true
 	end
 	print(string.format("[AURA] Opening Aura Management (try %d)", i))
-        if API.VB_FindPSettinOrder(1230).state == 0 or API.VB_FindPSettinOrder(1230).state == -1 then
+        if API.VB_FindPSettinOrder(1230).state == 0 or API.VB_FindPSettinOrder(1230).state== -1 then
             API.DoAction_Interface(0xffffffff, 0xffffffff, 1, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         elseif AURAS.isAuraActive() then
             API.DoAction_Interface(0xffffffff, API.GetEquipSlot(11).itemid1, 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
@@ -499,7 +510,10 @@ function AURAS.deactivateAura()
     return false
 end
 
-function AURAS.manageAura(rawInput)
+function AURAS.manageAura(rawInput, autoExtend)
+    if autoExtend == nil then
+        autoExtend = true
+    end
 
     local bad = AURAS.verifyAuras(AURAS.auraActions)
     if #bad > 0 then
@@ -562,7 +576,12 @@ function AURAS.manageAura(rawInput)
 
     elseif status == "Ready to use" then
         print(string.format("[AURA] '%s' ready to activate", auraName))
-        AURAS.extensionLogic()
+        if autoExtend then
+            print("[AURA] Auto-extension enabled, extending aura")
+            AURAS.extensionLogic()
+        else
+            print("[AURA] Auto-extension disabled, skipping extension")
+        end
         return AURAS.activateLoop()
 
     elseif status == "Currently recharging" then
@@ -570,7 +589,12 @@ function AURAS.manageAura(rawInput)
         local resets, usedType = AURAS.getAuraResetCount(auraName, true)
         if resets and resets > 0 then
             if AURAS.performReset(auraName, resets, usedType) then
-                AURAS.extensionLogic()
+                if autoExtend then
+                    print("[AURA] Auto-extension enabled, extending aura after reset")
+                    AURAS.extensionLogic()
+                else
+                    print("[AURA] Auto-extension disabled, skipping extension after reset")
+                end
                 return AURAS.activateLoop()
             else
                 error("[DEBUG] - Failed to reset aura")
@@ -588,24 +612,29 @@ function AURAS.manageAura(rawInput)
     end
 end
 
-function AURAS.activateAura(auraName)
-    if not AURAS.noResets then
+function AURAS.activateAura(auraName, autoExtend)
+    if autoExtend == nil then
+        autoExtend = true
+    end
 
-    	print(string.format("[AURA] Starting activation for aura '%s'", auraName))
-    	local ok = AURAS.manageAura(auraName)
-    	print(string.format("[AURA] manageAura returned: %s", tostring(ok)))
+    if not AURAS.noResets then
+        print(string.format("[AURA] Starting activation for aura '%s' (autoExtend: %s)", auraName, tostring(autoExtend)))
+        local ok = AURAS.manageAura(auraName, autoExtend)
+        print(string.format("[AURA] manageAura returned: %s", tostring(ok)))
 
 	if ok then
 		print(string.format("[DEBUG] manageAura success for '%s'", auraName))
 		if AURAS.refreshEarly then
-			AURAS.auraRefreshTime = math.random(15, 120)	-- reset the time to refresh the aura
+			AURAS.auraRefreshTime = math.random(15, 120)
+		end
+		if not AURAS.isBackpackOpen() then
+			print("[DEBUG] Opening backpack tab after aura activation returned true")
+			AURAS.openBackpack()
 		end
     	else
         	print(string.format("[DEBUG] manageAura failed for '%s', aborting activation.", auraName))
-		API.Write_LoopyLoop(false) -- issue detected
+		API.Write_LoopyLoop(false)
     	end
-    --else
-    --	print("[DEBUG] - No valid resets found for: ".. auraName)
     end
 
     if AURAS.isAuraManagementOpen() then
@@ -634,11 +663,3 @@ function AURAS.pin(bankPin)
 end
 
 return AURAS
-
---[[
-    AURAS.lua
-    Permission is hereby granted, free of charge, to any person obtaining a copy
-    of this software and associated documentation files to use them
-    without restriction, including without limitation to the rights
-    to use, copy, modify, merge, publish, and distribute. 
-]]
