@@ -1,13 +1,7 @@
 --[[
-    AURAS.lua [1.01]
-	Last update: 06/27/25 by <@600408294003048450>
-        * add AURAS.isEquipmentOpen() 			(function)
-	* add AURAS.isAuraManagementOpen() 		(function)
-	* add AURAS.deactivateAura() 			(function)
-	* add checks for AURAS.noResets 		(variable)
-	* add AURAS.auraTimeRemaining() 		(function)
-	* add passing bankpin via AURAS.pin(bankPin) 	(function)
-	* add AURAS.auraRefreshTime 			(variable)
+    AURAS.lua [1.03]
+	Last update: 07/10/25 by <@600408294003048450>
+        * AURAS.isAuraActive() change - uses buffbar, not VB
 ]]
 
 local AURAS = {}
