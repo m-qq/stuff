@@ -222,7 +222,7 @@ function AURAS.openEquipment()
 end
 
 function AURAS.isAuraActive()
-    return API.VB_FindPSettinOrder(1230).state == 8192
+    return API.Bbar_ConvToSeconds(API.Buffbar_GetIDstatus(26098, false))>0
 end
 
 function AURAS.isAuraManagementOpen()
@@ -233,14 +233,14 @@ end
 
 function AURAS.openAuraWindow()
     for i = 1, 3 do
-	if AURAS.isAuraManagementOpen() then
-		print(string.format("[AURA] Aura Management opened on try %d", i))
-		return true
-	end
-	print(string.format("[AURA] Opening Aura Management (try %d)", i))
-        if API.VB_FindPSettinOrder(1230).state == 0 or API.VB_FindPSettinOrder(1230).state== -1 then
+    if AURAS.isAuraManagementOpen() then
+        print(string.format("[AURA] Aura Management opened on try %d", i))
+        return true
+    end
+    print(string.format("[AURA] Opening Aura Management (try %d)", i))
+        if not AURAS.isAuraActive() then
             API.DoAction_Interface(0xffffffff, 0xffffffff, 1, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
-        elseif AURAS.isAuraActive() then
+        else
             API.DoAction_Interface(0xffffffff, API.GetEquipSlot(11).itemid1, 2, 1464, 15, 14, API.OFF_ACT_GeneralInterface_route)
         end
         API.RandomSleep2(math.random(1200, 2400), 200, 200)
