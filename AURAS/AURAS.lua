@@ -1,11 +1,7 @@
 --[[
-    AURAS.lua [1.02]
-	Last update: 07/03/25 by <@600408294003048450>
-        * autoExtend optional param added to manageAura()
-	* autoExtened optional param added to activateAura()
-	* true/false, automatically extend the aura if available
-	* AURAS.isBackpackOpen() check after aura activation, re-opens if false
-	* pulled AURAS.minRefresh and AURAS.maxRefresh out for easy access
+    AURAS.lua [1.03]
+	Last update: 07/10/25 by <@600408294003048450>
+        * AURAS.isAuraActive() change - uses buffbar, not VB
 ]]
 
 local AURAS = {}
