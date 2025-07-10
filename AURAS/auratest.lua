@@ -9,5 +9,7 @@ while API.Read_LoopyLoop() do
   print("[DEBUG] Remaining:", aura.auraTimeRemaining(), "-> refresh at", aura.auraRefreshTime)
   if aura.auraTimeRemaining() <= aura.auraRefreshTime then
     aura.activateAura(whichAura)
+    --AURAS.activateAura(auraName, autoExtend)
+    --autoExtend Aura is an optional param, default = true (param only needed when FALSE)
   end
 end
