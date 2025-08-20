@@ -1,3 +1,5 @@
+** NOT current 1.1 info - will update soon **
+
 **AURAS**
 
 A lightweight Lua module to automate aura management in your game client. This library provides functions to open the equipment interface, select and activate auras, handle aura extensions, and perform reset logic when auras are recharging.
