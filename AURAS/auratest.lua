@@ -1,15 +1,12 @@
 local API      		= require("api")		-- require api
-local aura     		= require("AURAS").pin(0000)	-- require AURAS library & enter your bank pin
-local whichAura		= "legendary call of the sea"	-- enter the desired aura
-
--- usage example
+local AURAS     		= require("AURAS").pin(0000)	-- require AURAS library & enter your bank pin
+  
 while API.Read_LoopyLoop() do
-  API.RandomSleep2(math.random(1200,2400),200,200)
-
-  print("[DEBUG] Remaining:", aura.auraTimeRemaining(), "-> refresh at", aura.auraRefreshTime)
-  if aura.auraTimeRemaining() <= aura.auraRefreshTime then
-    aura.activateAura(whichAura)
-    --aura.activateAura(auraName, autoExtend)
-    --autoExtend Aura is an optional param, default = true (param only needed when FALSE)
+  API.RandomSleep2(600, 0, 0)
+	if not AURAS.isAuraActive() and AURAS.isAnyAuraReady("friend in need") then
+    AURAS.activateAura("friend in need", false, false)
   end
+	if not AURAS.isAnyAuraReady("friend in need") then
+		print("Aura cd left: "..tostring(AURAS.getAuraCooldownRemaining("friend in need")))
+	end
 end
