@@ -19,6 +19,8 @@ local watchRandoms = true                       -- Auto-handle fishing notes, bo
 local MIN_IDLE_TIME_MINUTES = 5                 -- Minimum minutes before anti-idle action
 local MAX_IDLE_TIME_MINUTES = 15                -- Maximum minutes before anti-idle action
 
+API.SetMaxIdleTime(10)
+
 local alertItemLevel = 10                       -- Alert when augmented item reaches this level
 
 -- ═════════════════════════════════════════════════════
@@ -1748,3 +1750,4 @@ while API.Read_LoopyLoop() do
     handleEventProcessingAndCleanup()
     API.RandomSleep2(math.random(300, 500), 100, 600)
 end
+
