@@ -1,6 +1,6 @@
 local API = require("api")
 
-local mode = "adamant"  -- "headless", "rune", "adamant"
+local mode = "headless"  -- "headless", "rune", "adamant", "broad"
 
 local MODES = {
     headless = {
@@ -29,12 +29,22 @@ local MODES = {
             {id = 53, name = "Headless arrow"},   -- Headless arrows
             {id = 43, name = "Adamant arrowtips"} -- Adamant arrowtips
         }
+    },
+    broad = {
+        name = "Broad Arrows",
+        interfaceText = "Broad arrow x15",
+        inventoryAction = {itemId = 13278, action = API.OFF_ACT_GeneralInterface_route},
+        requiredItems = {
+            {id = 53, name = "Headless arrow"},     -- Headless arrows
+            {id = 13278, name = "Broad arrowheads"}, -- Broad arrowheads
+            {id = 4160, name = "Broad arrow"}       -- Product (for reference)
+        }
     }
 }
 
 local currentMode = MODES[mode]
 if not currentMode then
-    error("Invalid mode: " .. tostring(mode) .. ". Valid modes: headless, rune, adamant")
+    error("Invalid mode: " .. tostring(mode) .. ". Valid modes: headless, rune, adamant, broad")
 end
 
 print(string.format("[CONFIG] Mode: %s", currentMode.name))
