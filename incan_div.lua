@@ -427,6 +427,9 @@ local function mainLoop()
 	else
 	    manualDeposit = true
 	    print("Leagues - Standard mode: Deposit memories manually.")
+	    print("ERROR: Manual deposit not yet implemented!")
+	    print("Script terminated.")
+	    return
 	end
     elseif (MEMORY_DOWSER == true) then
     	if not API.Container_Check_Items(94, {ID.MEMORY_DOWSER}) then
@@ -438,6 +441,9 @@ local function mainLoop()
     else
 	manualDeposit = true
 	print("Standard mode: Deposit memories manually.")
+	print("ERROR: Manual deposit not yet implemented!")
+	print("Script terminated.")
+	return
     end
         
     energy.start = Inventory:GetItemAmount(wispConfig.energy)
