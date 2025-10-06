@@ -176,12 +176,79 @@ local CHECK_INTERVAL = 100
 local energy = {start = 0, current = 0, gained = 0}
 local strands = {start = 0, current = 0, gained = 0}
 local manualDeposit = false
+local startTime = 0
+local priorityTargets = {butterfly = 0, knowledge = 0, seren = 0}
+local currentTargetName = "None"
+
+local function formatNumber(num)
+    local sign = num < 0 and "-" or ""
+    local absNum = math.abs(num)
+
+    if absNum >= 1000000000 then
+        return sign .. string.format("%.2fB", absNum / 1000000000)
+    elseif absNum >= 1000000 then
+        return sign .. string.format("%.1fM", absNum / 1000000)
+    elseif absNum >= 1000 then
+        return sign .. string.format("%.1fK", absNum / 1000)
+    else
+        return tostring(num)
+    end
+end
+
+local function calculateMetrics()
+    local timeElapsed = os.time() - startTime
+    local energyPH = timeElapsed > 0 and math.floor((energy.gained * 3600) / timeElapsed) or 0
+    local strandsPH = timeElapsed > 0 and math.floor((strands.gained * 3600) / timeElapsed) or 0
+    local butterflyPH = timeElapsed > 0 and math.floor((priorityTargets.butterfly * 3600) / timeElapsed) or 0
+    local knowledgePH = timeElapsed > 0 and math.floor((priorityTargets.knowledge * 3600) / timeElapsed) or 0
+    local serenPH = timeElapsed > 0 and math.floor((priorityTargets.seren * 3600) / timeElapsed) or 0
+
+    local conversionMode = API.GetVarbitValue(40524)
+    local modeText = ""
+    if conversionMode == 1 then
+        modeText = "Memories & Energy -> XP"
+    elseif conversionMode == 0 then
+        modeText = "Memories -> XP, Keep Energy"
+    elseif conversionMode == 2 then
+        modeText = "Memories -> Energy"
+    else
+        modeText = "Unknown"
+    end
+
+    local metrics = {
+        { "Wisp:", WISP_TYPE },
+        { "Target:", currentTargetName },
+        { "Mode:", modeText }
+    }
+
+    if energy.gained > 0 then
+        table.insert(metrics, { "Energy:", formatNumber(energy.gained) .. " (" .. formatNumber(energyPH) .. "/h)" })
+    end
+
+    if strands.gained > 0 then
+        table.insert(metrics, { "Memory Strands:", formatNumber(strands.gained) .. " (" .. formatNumber(strandsPH) .. "/h)" })
+    end
+
+    if priorityTargets.butterfly > 0 then
+        table.insert(metrics, { "Butterflies:", tostring(priorityTargets.butterfly) .. " (" .. tostring(butterflyPH) .. "/h)" })
+    end
+
+    if priorityTargets.knowledge > 0 then
+        table.insert(metrics, { "Manifested Knowledge:", tostring(priorityTargets.knowledge) .. " (" .. tostring(knowledgePH) .. "/h)" })
+    end
+
+    if priorityTargets.seren > 0 then
+        table.insert(metrics, { "Seren Spirits:", tostring(priorityTargets.seren) .. " (" .. tostring(serenPH) .. "/h)" })
+    end
+
+    return metrics
+end
 
 local function waitForCondition(conditionFunc, timeout, checkInterval)
-    local startTime = API.ScriptRuntime()
+    local conditionStartTime = API.ScriptRuntime()
     local interval = checkInterval or CHECK_INTERVAL
 
-    while (API.ScriptRuntime() - startTime) < timeout and API.Read_LoopyLoop() do
+    while (API.ScriptRuntime() - conditionStartTime) < timeout and API.Read_LoopyLoop() do
         if conditionFunc() then
             return true
         end
@@ -198,9 +265,17 @@ local function handlePriorityTarget(npcId, name, waitForDisappear)
         API.RandomSleep2(300, 700, math.random(600, 1000))
         API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {npcId}, 50)
 
+        if npcId == ID.BUTTERFLY then
+            priorityTargets.butterfly = priorityTargets.butterfly + 1
+        elseif npcId == ID.KNOWLEDGE then
+            priorityTargets.knowledge = priorityTargets.knowledge + 1
+        elseif npcId == ID.SEREN_SPIRIT then
+            priorityTargets.seren = priorityTargets.seren + 1
+        end
+
         if waitForDisappear then
-            local startTime = API.ScriptRuntime()
-            while (API.ScriptRuntime() - startTime) < BUTTERFLY_TIMEOUT and API.Read_LoopyLoop() do
+            local targetStartTime = API.ScriptRuntime()
+            while (API.ScriptRuntime() - targetStartTime) < BUTTERFLY_TIMEOUT and API.Read_LoopyLoop() do
                 API.RandomSleep2(CHECK_INTERVAL, 50, 50)
                 local newNpcs = API.GetAllObjArray1({npcId}, 50, {1})
                 if #newNpcs == 0 then
@@ -246,6 +321,7 @@ local function handleWisp()
             API.RandomSleep2(300, 700, math.random(600, 1000))
             targetId = wispConfig.enriched_spring
             targetName = "enriched spring"
+            currentTargetName = targetName
             API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.enriched_spring}, 50)
         end
     end
@@ -257,6 +333,7 @@ local function handleWisp()
             API.RandomSleep2(300, 700, math.random(600, 1000))
             targetId = wispConfig.enriched_wisp
             targetName = "enriched wisp"
+            currentTargetName = targetName
             API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.enriched_wisp}, 50)
         end
     end
@@ -268,6 +345,7 @@ local function handleWisp()
             API.RandomSleep2(300, 700, math.random(600, 1000))
             targetId = wispConfig.spring
             targetName = "spring"
+            currentTargetName = targetName
             API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.spring}, 50)
         end
     end
@@ -279,6 +357,7 @@ local function handleWisp()
             API.RandomSleep2(300, 700, math.random(600, 1000))
             targetId = wispConfig.wisp
             targetName = "wisp"
+            currentTargetName = targetName
             API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.wisp}, 50)
         end
     end
@@ -291,6 +370,7 @@ local function handleWisp()
             print("Siphoning...")
             while API.ReadPlayerAnim() == ID.SIPHON_ANIM and API.Read_LoopyLoop() do
                 updateTracking()
+                API.DrawTable(calculateMetrics())
 
                 local butterflies = API.GetAllObjArray1({ID.BUTTERFLY}, 50, {1})
                 local knowledge = API.GetAllObjArray1({ID.KNOWLEDGE}, 50, {1})
@@ -356,7 +436,21 @@ local function getRiftLocation()
     return nil, nil
 end
 
+local function checkPlayerState()
+    if API.GetLocalPlayerAddress() == 0 or API.GetGameState2() ~= 3 then
+        print("ERROR: Bad player state detected!")
+        print("Script terminated.")
+        API.Write_LoopyLoop(false)
+        return false
+    end
+    return true
+end
+
 local function mainLoop()
+    if not checkPlayerState() then
+        return
+    end
+
     if (HATCHET_OF_DIVINITY == true) and (MEMORY_DOWSER == true) then
 	print("ERROR: Invalid Config - Hatchet and Dowser both selected.")
         print("Script terminated.")
@@ -452,7 +546,16 @@ local function mainLoop()
     strands.start = API.GetVarbitValue(ID.MEMORY_VARBIT)
     strands.current = strands.start
     print(string.format("Starting with %d memory strands", strands.start))
+
+    startTime = os.time()
+
     while API.Read_LoopyLoop() do
+        if not checkPlayerState() then
+            break
+        end
+
+        API.DrawTable(calculateMetrics())
+
         if not checkLocation(wispConfig) then
             print("ERROR: Moved too far from rift location!")
             print("Script terminated.")
