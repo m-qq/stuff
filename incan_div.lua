@@ -7,6 +7,11 @@ API.SetMaxIdleTime(9)
 
 local WISP_TYPE = "INCANDESCENT"
 
+local LEAGUES = true
+
+local HATCHET_OF_DIVINITY = true
+local MEMORY_DOWSER = false
+
 local WISP_DATA = {
     PALE = {
         spring = 18173,
@@ -158,6 +163,7 @@ local ID = {
     SIPHON_ANIM = 21228,
     MEMORY_VARBIT = 34807,
     HATCHET = 59629,
+    MEMORY_DOWSER = 57521,
 
     -- For depositing memories manually:
     -- EMPOWERED_RIFT = 93489 (type 0)
@@ -169,6 +175,7 @@ local CHECK_INTERVAL = 100
 
 local energy = {start = 0, current = 0, gained = 0}
 local strands = {start = 0, current = 0, gained = 0}
+local manualDeposit = false
 
 local function waitForCondition(conditionFunc, timeout, checkInterval)
     local startTime = API.ScriptRuntime()
@@ -350,6 +357,12 @@ local function getRiftLocation()
 end
 
 local function mainLoop()
+    if (HATCHET_OF_DIVINITY == true) and (MEMORY_DOWSER == true) then
+	print("ERROR: Invalid Config - Hatchet and Dowser both selected.")
+        print("Script terminated.")
+        return
+    end
+
     local wispConfig = WISP_DATA[WISP_TYPE]
     if not wispConfig then
         print("ERROR: Invalid WISP_TYPE '" .. WISP_TYPE .. "' configured!")
@@ -360,7 +373,6 @@ local function mainLoop()
     print("Starting " .. WISP_TYPE .. " Divination script...")
     print(string.format("Configuration: Wisp Type = %s, Required Level = %d", WISP_TYPE, wispConfig.level))
 
-    -- Check level requirement
     local currentLevel = API.XPLevelTable(API.GetSkillXP("DIVINATION"))
     print(string.format("Current Divination Level: %d (Required: %d)", currentLevel, wispConfig.level))
     if currentLevel < wispConfig.level then
@@ -369,7 +381,6 @@ local function mainLoop()
         return
     end
 
-    -- Check and display conversion mode
     local conversionMode = API.GetVarbitValue(40524)
     local modeText = ""
     if conversionMode == 1 then
@@ -383,7 +394,6 @@ local function mainLoop()
     end
     print(string.format("Conversion Mode (varbit 40524): %d - %s", conversionMode, modeText))
 
-    -- Verify rift location
     local riftX, riftY = getRiftLocation()
     if riftX and riftY then
         print(string.format("Rift found at: %.1f, %.1f (Expected: %.1f, %.1f)",
@@ -392,20 +402,44 @@ local function mainLoop()
         print("WARNING: Could not detect rift location!")
     end
 
-    -- Check location
     if not checkLocation(wispConfig) then
         print("ERROR: Not at correct location for " .. WISP_TYPE .. " wisps!")
         print("Script terminated.")
         return
     end
     print("Location check passed.")
-
-    if not API.Container_Check_Items(94, {ID.HATCHET}) then
-        print("ERROR: Hatchet of divinity (id = " .. ID.HATCHET .. ") not equipped!")
-        print("Script terminated.")
-        return
+    
+    if (LEAGUES == true) then
+	if (HATCHET_OF_DIVINITY == true) then
+    	    if not API.Container_Check_Items(94, {ID.HATCHET}) then
+            	print("ERROR: Leagues - Hatchet of divinity (id = " .. ID.HATCHET .. ") not equipped!")
+            	print("Script terminated.")
+            	return
+            end
+	    print("Leagues - Hatchet of divinity equipped.")
+	elseif (MEMORY_DOWSER == true) then
+    	    if not API.Container_Check_Items(94, {ID.MEMORY_DOWSER}) then
+            	print("ERROR: Leagues - Memory Dowser (id = " .. ID.MEMORY_DOWSER .. ") not equipped!")
+            	print("Script terminated.")
+            	return
+            end
+            print("Leagues - Memory dowser equipped.")
+	else
+	    manualDeposit = true
+	    print("Leagues - Standard mode: Deposit memories manually.")
+	end
+    elseif (MEMORY_DOWSER == true) then
+    	if not API.Container_Check_Items(94, {ID.MEMORY_DOWSER}) then
+            print("ERROR: Memory Dowser (id = " .. ID.MEMORY_DOWSER .. ") not equipped!")
+            print("Script terminated.")
+            return
+        end
+	print("Memory dowser equipped.")
+    else
+	manualDeposit = true
+	print("Standard mode: Deposit memories manually.")
     end
-    print("Hatchet of divinity equipped.")
+        
     energy.start = Inventory:GetItemAmount(wispConfig.energy)
     energy.current = energy.start
     print(string.format("Starting with %d energy in inventory", energy.start))
@@ -413,7 +447,6 @@ local function mainLoop()
     strands.current = strands.start
     print(string.format("Starting with %d memory strands", strands.start))
     while API.Read_LoopyLoop() do
-        -- Periodic location check
         if not checkLocation(wispConfig) then
             print("ERROR: Moved too far from rift location!")
             print("Script terminated.")
