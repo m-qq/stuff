@@ -78,6 +78,22 @@ local function handlePriorityTarget(npcId, name, waitForDisappear)
     return false
 end
 
+local function updateTracking()
+    local wispConfig = WISP_DATA[WISP_TYPE]
+    local newEnergy = Inventory:GetItemAmount(wispConfig.energy)
+    if newEnergy ~= energy.current then
+        energy.current = newEnergy
+        energy.gained = energy.current - energy.start
+        print(string.format("Energy gained this session: %d (Total: %d)", energy.gained, energy.current))
+    end
+    local newStrands = API.GetVarbitValue(ID.MEMORY_VARBIT)
+    if newStrands ~= strands.current then
+        strands.current = newStrands
+        strands.gained = strands.current - strands.start
+        print(string.format("Memory strands gained this session: %d (Total: %d)", strands.gained, strands.current))
+    end
+end
+
 local function handleWisp()
     local wispConfig = WISP_DATA[WISP_TYPE]
     local targetId = nil
@@ -141,22 +157,6 @@ local function handleWisp()
         return true
     end
     return false
-end
-
-local function updateTracking()
-    local wispConfig = WISP_DATA[WISP_TYPE]
-    local newEnergy = Inventory:GetItemAmount(wispConfig.energy)
-    if newEnergy ~= energy.current then
-        energy.current = newEnergy
-        energy.gained = energy.current - energy.start
-        print(string.format("Energy gained this session: %d (Total: %d)", energy.gained, energy.current))
-    end
-    local newStrands = API.GetVarbitValue(ID.MEMORY_VARBIT)
-    if newStrands ~= strands.current then
-        strands.current = newStrands
-        strands.gained = strands.current - strands.start
-        print(string.format("Memory strands gained this session: %d (Total: %d)", strands.gained, strands.current))
-    end
 end
 
 local function mainLoop()
