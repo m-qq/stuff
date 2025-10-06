@@ -24,10 +24,10 @@ local ID = {
     SEREN_SPIRIT = 26022,
     SIPHON_ANIM = 21228,
     MEMORY_VARBIT = 34807,
-    HATCHET = 59629
+    HATCHET = 59629,
 
     -- For depositing memories manually:
-    -- EMPOWERED_RIFT = 93489 (type 0),
+    -- EMPOWERED_RIFT = 93489 (type 0)
     -- ENERGY_RIFT = 87306 (type 12)
 }
 
@@ -117,6 +117,8 @@ local function handleWisp()
         if animStarted then
             print("Siphoning...")
             while API.ReadPlayerAnim() == ID.SIPHON_ANIM and API.Read_LoopyLoop() do
+                updateTracking()
+
                 local butterflies = API.GetAllObjArray1({ID.BUTTERFLY}, 50, {1})
                 local knowledge = API.GetAllObjArray1({ID.KNOWLEDGE}, 50, {1})
 
