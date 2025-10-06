@@ -173,7 +173,6 @@ local function handleWisp()
     local targetId = nil
     local targetName = nil
 
-    -- Check for enriched spring first (highest priority)
     if wispConfig.enriched_spring then
         local enrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
         if #enrichedSprings > 0 then
@@ -185,7 +184,6 @@ local function handleWisp()
         end
     end
 
-    -- Check for enriched wisp (second priority)
     if not targetId and wispConfig.enriched_wisp then
         local enrichedWisps = API.GetAllObjArray1({wispConfig.enriched_wisp}, 50, {1})
         if #enrichedWisps > 0 then
@@ -197,7 +195,6 @@ local function handleWisp()
         end
     end
 
-    -- Check for regular spring
     if not targetId then
         local springs = API.GetAllObjArray1({wispConfig.spring}, 50, {1})
         if #springs > 0 then
@@ -209,7 +206,6 @@ local function handleWisp()
         end
     end
 
-    -- Fall back to regular wisp
     if not targetId then
         local wisps = API.GetAllObjArray1({wispConfig.wisp}, 50, {1})
         if #wisps > 0 then
@@ -238,20 +234,23 @@ local function handleWisp()
                     break
                 end
 
-                -- Check if enriched spring or wisp appeared while siphoning a non-enriched target
-                if wispConfig.enriched_spring and targetId ~= wispConfig.enriched_spring then
-                    local newEnrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
-                    if #newEnrichedSprings > 0 then
-                        print("Enriched spring appeared, switching...")
-                        break
-                    end
-                end
+                local isHarvestingEnriched = (targetId == wispConfig.enriched_spring or targetId == wispConfig.enriched_wisp)
 
-                if wispConfig.enriched_wisp and targetId ~= wispConfig.enriched_wisp and targetId ~= wispConfig.enriched_spring then
-                    local newEnrichedWisps = API.GetAllObjArray1({wispConfig.enriched_wisp}, 50, {1})
-                    if #newEnrichedWisps > 0 then
-                        print("Enriched wisp appeared, switching...")
-                        break
+                if not isHarvestingEnriched then
+                    if wispConfig.enriched_spring then
+                        local newEnrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
+                        if #newEnrichedSprings > 0 then
+                            print("Enriched spring appeared, switching...")
+                            break
+                        end
+                    end
+
+                    if wispConfig.enriched_wisp then
+                        local newEnrichedWisps = API.GetAllObjArray1({wispConfig.enriched_wisp}, 50, {1})
+                        if #newEnrichedWisps > 0 then
+                            print("Enriched wisp appeared, switching...")
+                            break
+                        end
                     end
                 end
 
