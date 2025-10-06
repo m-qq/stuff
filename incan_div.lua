@@ -25,6 +25,10 @@ local ID = {
     SIPHON_ANIM = 21228,
     MEMORY_VARBIT = 34807,
     HATCHET = 59629
+
+    -- For depositing memories manually:
+    -- EMPOWERED_RIFT = 93489 (type 0),
+    -- ENERGY_RIFT = 87306 (type 12)
 }
 
 local BUTTERFLY_TIMEOUT = 15
