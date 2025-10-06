@@ -11,84 +11,143 @@ local WISP_DATA = {
     PALE = {
         spring = 18173,
         wisp = 18150,
-        energy = 29313
+        energy = 29313,
+        memory = 29384,
+        rift_x = 3121.0,
+        rift_y = 3216.0,
+        level = 1
     },
     FLICKERING = {
         enriched_spring = 18175,
         enriched_wisp = 18154,
         spring = 18174,
         wisp = 18151,
-        energy = 29314
+        energy = 29314,
+        memory = 29385,
+        enriched_memory = 39396,
+        rift_x = 3007.0,
+        rift_y = 3402.0,
+        level = 10
     },
     BRIGHT = {
         enriched_spring = 18177,
         enriched_wisp = 18154,
         spring = 18176,
         wisp = 18153,
-        energy = 29315
+        energy = 29315,
+        memory = 29386,
+        enriched_memory = 29397,
+        rift_x = 3303.0,
+        rift_y = 3396.0,
+        level = 20
     },
     GLOWING = {
         enriched_spring = 18179,
         enriched_wisp = 18156,
         spring = 18178,
         wisp = 18155,
-        energy = 29316
+        energy = 29316,
+        memory = 29387,
+        enriched_memory = 29398,
+        rift_x = 2735.0,
+        rift_y = 3413.0,
+        level = 30
     },
     SPARKLING = {
         enriched_spring = 18181,
         enriched_wisp = 18158,
         spring = 18180,
         wisp = 18157,
-        energy = 29317
+        energy = 29317,
+        memory = 29388,
+        enriched_memory = 29399,
+        rift_x = 2769.0,
+        rift_y = 3599.0,
+        level = 40
     },
     GLEAMING = {
         enriched_spring = 18183,
         enriched_wisp = 18160,
         spring = 18182,
         wisp = 18159,
-        energy = 29318
+        energy = 29318,
+        memory = 29389,
+        enriched_memory = 29400,
+        rift_x = 2890.0,
+        rift_y = 3047.0,
+        level = 50
     },
     VIBRANT = {
         enriched_spring = 18185,
         enriched_wisp = 18162,
         spring = 18184,
         wisp = 18161,
-        energy = 29319
+        energy = 29319,
+        memory = 29390,
+        enriched_memory = 29401,
+        rift_x = 2422.0,
+        rift_y = 2864.0,
+        level = 60
     },
     LUSTROUS = {
         enriched_spring = 18187,
         enriched_wisp = 18164,
         spring = 18186,
         wisp = 18163,
-        energy = 29320
+        energy = 29320,
+        memory = 29391,
+        enriched_memory = 29402,
+        rift_x = 3468.0,
+        rift_y = 3539.0,
+        level = 70
     },
     BRILLIANT = {
         enriched_spring = 18189,
         enriched_wisp = 18166,
         spring = 18188,
         wisp = 18165,
-        energy = 29321
+        energy = 29321,
+        memory = 29392,
+        enriched_memory = 29403,
+        rift_x = 3405.0,
+        rift_y = 3294.0,
+        level = 80
     },
     RADIANT = {
         enriched_spring = 18191,
         enriched_wisp = 18168,
         spring = 18190,
         wisp = 18167,
-        energy = 29322
+        energy = 29322,
+        memory = 29393,
+        enriched_memory = 29404,
+        rift_x = 3805.0,
+        rift_y = 3552.0,
+        level = 85
     },
     LUMINOUS = {
         enriched_spring = 18193,
         enriched_wisp = 18170,
         spring = 18192,
         wisp = 18169,
-        energy = 29323
+        energy = 29323,
+        memory = 29394,
+        enriched_memory = 29405,
+        rift_x = 3315.0,
+        rift_y = 2658.0,
+        level = 90
     },
     INCANDESCENT = {
         enriched_spring = 18195,
         enriched_wisp = 18172,
         spring = 18194,
         wisp = 18171,
-        energy = 29324
+        energy = 29324,
+        memory = 29395,
+        enriched_memory = 29406,
+        rift_x = 2282.0,
+        rift_y = 3048.0,
+        level = 95
     }
 }
 
@@ -263,6 +322,33 @@ local function handleWisp()
     return false
 end
 
+local function checkLocation(wispConfig)
+    local playerX = API.PlayerCoord().x
+    local playerY = API.PlayerCoord().y
+    local distance = math.sqrt((playerX - wispConfig.rift_x)^2 + (playerY - wispConfig.rift_y)^2)
+
+    if distance > 40 then
+        print(string.format("WARNING: Too far from rift! Distance: %.1f (Player: %.1f, %.1f | Rift: %.1f, %.1f)",
+            distance, playerX, playerY, wispConfig.rift_x, wispConfig.rift_y))
+        return false
+    end
+    return true
+end
+
+local function getRiftLocation()
+    local energyRift = API.GetAllObjArray1({87306}, 40, {12})
+    if #energyRift > 0 then
+        return energyRift[1].Tile_XYZ.x, energyRift[1].Tile_XYZ.y
+    end
+
+    local empoweredRift = API.GetAllObjArray1({93489}, 40, {0})
+    if #empoweredRift > 0 then
+        return empoweredRift[1].Tile_XYZ.x, empoweredRift[1].Tile_XYZ.y
+    end
+
+    return nil, nil
+end
+
 local function mainLoop()
     local wispConfig = WISP_DATA[WISP_TYPE]
     if not wispConfig then
@@ -272,6 +358,48 @@ local function mainLoop()
     end
 
     print("Starting " .. WISP_TYPE .. " Divination script...")
+    print(string.format("Configuration: Wisp Type = %s, Required Level = %d", WISP_TYPE, wispConfig.level))
+
+    -- Check level requirement
+    local currentLevel = API.XPLevelTable(API.GetSkillXP("DIVINATION"))
+    print(string.format("Current Divination Level: %d (Required: %d)", currentLevel, wispConfig.level))
+    if currentLevel < wispConfig.level then
+        print(string.format("ERROR: Insufficient Divination level! You need level %d.", wispConfig.level))
+        print("Script terminated.")
+        return
+    end
+
+    -- Check and display conversion mode
+    local conversionMode = API.GetVarbitValue(40524)
+    local modeText = ""
+    if conversionMode == 1 then
+        modeText = "Convert memories and energy into XP"
+    elseif conversionMode == 0 then
+        modeText = "Convert memories into XP, keep energy"
+    elseif conversionMode == 2 then
+        modeText = "Convert memories into energy"
+    else
+        modeText = "Unknown mode"
+    end
+    print(string.format("Conversion Mode (varbit 40524): %d - %s", conversionMode, modeText))
+
+    -- Verify rift location
+    local riftX, riftY = getRiftLocation()
+    if riftX and riftY then
+        print(string.format("Rift found at: %.1f, %.1f (Expected: %.1f, %.1f)",
+            riftX, riftY, wispConfig.rift_x, wispConfig.rift_y))
+    else
+        print("WARNING: Could not detect rift location!")
+    end
+
+    -- Check location
+    if not checkLocation(wispConfig) then
+        print("ERROR: Not at correct location for " .. WISP_TYPE .. " wisps!")
+        print("Script terminated.")
+        return
+    end
+    print("Location check passed.")
+
     if not API.Container_Check_Items(94, {ID.HATCHET}) then
         print("ERROR: Hatchet of divinity (id = " .. ID.HATCHET .. ") not equipped!")
         print("Script terminated.")
@@ -285,6 +413,13 @@ local function mainLoop()
     strands.current = strands.start
     print(string.format("Starting with %d memory strands", strands.start))
     while API.Read_LoopyLoop() do
+        -- Periodic location check
+        if not checkLocation(wispConfig) then
+            print("ERROR: Moved too far from rift location!")
+            print("Script terminated.")
+            break
+        end
+
         updateTracking()
         if handlePriorityTarget(ID.BUTTERFLY, "Guthixian butterfly", true) then
             API.RandomSleep2(300, 500, 200)
