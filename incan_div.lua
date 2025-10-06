@@ -5,17 +5,91 @@ API.SetDrawLogs(true)
 API.SetDrawTrackedSkills(true)
 API.SetMaxIdleTime(9)
 
-local WISP_TYPE = "INCANDESCENT"  
+local WISP_TYPE = "INCANDESCENT"
 
 local WISP_DATA = {
+    PALE = {
+        spring = 18173,
+        wisp = 18150,
+        energy = 29313
+    },
+    FLICKERING = {
+        enriched_spring = 18175,
+        enriched_wisp = 18154,
+        spring = 18174,
+        wisp = 18151,
+        energy = 29314
+    },
+    BRIGHT = {
+        enriched_spring = 18177,
+        enriched_wisp = 18154,
+        spring = 18176,
+        wisp = 18153,
+        energy = 29315
+    },
+    GLOWING = {
+        enriched_spring = 18179,
+        enriched_wisp = 18156,
+        spring = 18178,
+        wisp = 18155,
+        energy = 29316
+    },
+    SPARKLING = {
+        enriched_spring = 18181,
+        enriched_wisp = 18158,
+        spring = 18180,
+        wisp = 18157,
+        energy = 29317
+    },
+    GLEAMING = {
+        enriched_spring = 18183,
+        enriched_wisp = 18160,
+        spring = 18182,
+        wisp = 18159,
+        energy = 29318
+    },
+    VIBRANT = {
+        enriched_spring = 18185,
+        enriched_wisp = 18162,
+        spring = 18184,
+        wisp = 18161,
+        energy = 29319
+    },
+    LUSTROUS = {
+        enriched_spring = 18187,
+        enriched_wisp = 18164,
+        spring = 18186,
+        wisp = 18163,
+        energy = 29320
+    },
+    BRILLIANT = {
+        enriched_spring = 18189,
+        enriched_wisp = 18166,
+        spring = 18188,
+        wisp = 18165,
+        energy = 29321
+    },
+    RADIANT = {
+        enriched_spring = 18191,
+        enriched_wisp = 18168,
+        spring = 18190,
+        wisp = 18167,
+        energy = 29322
+    },
+    LUMINOUS = {
+        enriched_spring = 18193,
+        enriched_wisp = 18170,
+        spring = 18192,
+        wisp = 18169,
+        energy = 29323
+    },
     INCANDESCENT = {
         enriched_spring = 18195,
+        enriched_wisp = 18172,
         spring = 18194,
         wisp = 18171,
         energy = 29324
     }
-    -- Add other wisp types here, e.g.:
-    -- LUMINOUS = { enriched_spring = XXXXX, spring = XXXXX, wisp = XXXXX, energy = XXXXX },
 }
 
 local ID = {
@@ -99,14 +173,32 @@ local function handleWisp()
     local targetId = nil
     local targetName = nil
 
-    local enrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
-    if #enrichedSprings > 0 then
-        print("Found enriched spring, interacting...")
-        API.RandomSleep2(300, 700, math.random(600, 1000))
-        targetId = wispConfig.enriched_spring
-        targetName = "enriched spring"
-        API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.enriched_spring}, 50)
-    else
+    -- Check for enriched spring first (highest priority)
+    if wispConfig.enriched_spring then
+        local enrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
+        if #enrichedSprings > 0 then
+            print("Found enriched spring, interacting...")
+            API.RandomSleep2(300, 700, math.random(600, 1000))
+            targetId = wispConfig.enriched_spring
+            targetName = "enriched spring"
+            API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.enriched_spring}, 50)
+        end
+    end
+
+    -- Check for enriched wisp (second priority)
+    if not targetId and wispConfig.enriched_wisp then
+        local enrichedWisps = API.GetAllObjArray1({wispConfig.enriched_wisp}, 50, {1})
+        if #enrichedWisps > 0 then
+            print("Found enriched wisp, interacting...")
+            API.RandomSleep2(300, 700, math.random(600, 1000))
+            targetId = wispConfig.enriched_wisp
+            targetName = "enriched wisp"
+            API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.enriched_wisp}, 50)
+        end
+    end
+
+    -- Check for regular spring
+    if not targetId then
         local springs = API.GetAllObjArray1({wispConfig.spring}, 50, {1})
         if #springs > 0 then
             print("Found spring, interacting...")
@@ -114,15 +206,18 @@ local function handleWisp()
             targetId = wispConfig.spring
             targetName = "spring"
             API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.spring}, 50)
-        else
-            local wisps = API.GetAllObjArray1({wispConfig.wisp}, 50, {1})
-            if #wisps > 0 then
-                print("Found wisp, interacting...")
-                API.RandomSleep2(300, 700, math.random(600, 1000))
-                targetId = wispConfig.wisp
-                targetName = "wisp"
-                API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.wisp}, 50)
-            end
+        end
+    end
+
+    -- Fall back to regular wisp
+    if not targetId then
+        local wisps = API.GetAllObjArray1({wispConfig.wisp}, 50, {1})
+        if #wisps > 0 then
+            print("Found wisp, interacting...")
+            API.RandomSleep2(300, 700, math.random(600, 1000))
+            targetId = wispConfig.wisp
+            targetName = "wisp"
+            API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.wisp}, 50)
         end
     end
 
@@ -142,10 +237,20 @@ local function handleWisp()
                     print("Priority target detected, interrupting siphon")
                     break
                 end
-                if targetId ~= wispConfig.enriched_spring then
+
+                -- Check if enriched spring or wisp appeared while siphoning a non-enriched target
+                if wispConfig.enriched_spring and targetId ~= wispConfig.enriched_spring then
                     local newEnrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
                     if #newEnrichedSprings > 0 then
                         print("Enriched spring appeared, switching...")
+                        break
+                    end
+                end
+
+                if wispConfig.enriched_wisp and targetId ~= wispConfig.enriched_wisp and targetId ~= wispConfig.enriched_spring then
+                    local newEnrichedWisps = API.GetAllObjArray1({wispConfig.enriched_wisp}, 50, {1})
+                    if #newEnrichedWisps > 0 then
+                        print("Enriched wisp appeared, switching...")
                         break
                     end
                 end
