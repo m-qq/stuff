@@ -51,6 +51,7 @@ local function handlePriorityTarget(npcId, name, waitForDisappear)
     local npcs = API.GetAllObjArray1({npcId}, 50, {1})
     if #npcs > 0 then
         print("Found " .. name .. ", interacting...")
+        API.RandomSleep2(300, 700, math.random(600, 1000))
         API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {npcId}, 50)
 
         if waitForDisappear then
@@ -81,6 +82,7 @@ local function handleWisp()
     local enrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
     if #enrichedSprings > 0 then
         print("Found enriched spring, interacting...")
+        API.RandomSleep2(300, 700, math.random(600, 1000))
         targetId = wispConfig.enriched_spring
         targetName = "enriched spring"
         API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.enriched_spring}, 50)
@@ -88,6 +90,7 @@ local function handleWisp()
         local springs = API.GetAllObjArray1({wispConfig.spring}, 50, {1})
         if #springs > 0 then
             print("Found spring, interacting...")
+            API.RandomSleep2(300, 700, math.random(600, 1000))
             targetId = wispConfig.spring
             targetName = "spring"
             API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.spring}, 50)
@@ -95,6 +98,7 @@ local function handleWisp()
             local wisps = API.GetAllObjArray1({wispConfig.wisp}, 50, {1})
             if #wisps > 0 then
                 print("Found wisp, interacting...")
+                API.RandomSleep2(300, 700, math.random(600, 1000))
                 targetId = wispConfig.wisp
                 targetName = "wisp"
                 API.DoAction_NPC(0xc8, API.OFF_ACT_InteractNPC_route, {wispConfig.wisp}, 50)
@@ -116,6 +120,14 @@ local function handleWisp()
                     print("Priority target detected, interrupting siphon")
                     break
                 end
+                if targetId ~= wispConfig.enriched_spring then
+                    local newEnrichedSprings = API.GetAllObjArray1({wispConfig.enriched_spring}, 50, {1})
+                    if #newEnrichedSprings > 0 then
+                        print("Enriched spring appeared, switching...")
+                        break
+                    end
+                end
+
                 API.RandomSleep2(CHECK_INTERVAL, 50, 50)
             end
             print("Siphoning complete")
