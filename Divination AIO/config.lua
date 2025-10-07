@@ -1,0 +1,6 @@
+SM:AddTab("Main")
+SM:Checkbox("Leagues Mode", "Leagues", false)
+SM:Checkbox("Use Hatchet of Divinity (Leagues only)", "HatchetOfDivinity", false)
+SM:Checkbox("Use Memory Dowser", "MemoryDowser", false)
+SM:Dropdown("Conversion Mode", "ConversionMode", {"Convert memories into XP, keep energy", "Convert memories and energy into XP", "Convert memories into energy"}, "Convert memories and energy into XP")
+SM:Dropdown("Wisp type", "WispType", {"PALE", "FLICKERING", "BRIGHT", "GLOWING", "SPARKLING", "GLEAMING", "VIBRANT", "LUSTROUS", "BRILLIANT", "RADIANT", "LUMINOUS", "INCANDESCENT"}, "INCANDESCENT")
