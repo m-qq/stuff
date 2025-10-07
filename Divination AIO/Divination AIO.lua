@@ -181,6 +181,7 @@ local ID = {
     MEMORY_DOWSER = 57521,
     RIFT = 87306,
     EMPOWERED_RIFT = 93489,
+    DIVINATION_PET = 38117,
 }
 
 local BUTTERFLY_TIMEOUT = 15
@@ -192,6 +193,7 @@ local manualDeposit = false
 local startTime = 0
 local priorityTargets = {butterfly = 0, knowledge = 0, seren = 0}
 local currentTargetName = "None"
+local petReceived = false
 
 local function formatNumber(num)
     local sign = num < 0 and "-" or ""
@@ -252,6 +254,10 @@ local function calculateMetrics()
 
     if priorityTargets.seren > 0 then
         table.insert(metrics, { "Seren Spirits:", tostring(priorityTargets.seren) .. " (" .. tostring(serenPH) .. "/h)" })
+    end
+
+    if petReceived then
+        table.insert(metrics, { "Skill Pets:", "Willow Obtained!" })
     end
 
     return metrics
@@ -319,6 +325,12 @@ local function updateTracking()
         strands.current = newStrands
         strands.gained = strands.current - strands.start
         print(string.format("Memory strands gained this session: %d (Total: %d)", strands.gained, strands.current))
+    end
+    if not petReceived and Inventory:Contains(ID.DIVINATION_PET) then
+        petReceived = true
+        print("========================================")
+        print("    DIVINATION PET RECEIVED!")
+        print("========================================")
     end
 end
 
