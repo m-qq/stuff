@@ -567,7 +567,15 @@ local function changeConversionMode(targetMode)
     end
 
     local interfaceOpened = waitForCondition(function()
-        return API.ScanForInterfaceTest2Get(false, {{131, 7, 14, 0}})[1].textids == "Memory Conversion"
+        local result = API.ScanForInterfaceTest2Get(false, {{131, 4, -1, 0}, {131, 7, -1, 0}, {131, 7, 14, 0}})
+        if result and result[1] then
+            local textValue = result[1].textids
+            print("DEBUG: textids = '" .. tostring(textValue) .. "'")
+            if textValue == "Memory Conversion:" or textValue == "Memory Conversion" then
+                return true
+            end
+        end
+        return false
     end, 5, 200)
 
     if not interfaceOpened then
