@@ -483,8 +483,9 @@ local function handleWisp()
 
                 local butterflies = API.GetAllObjArray1({ID.BUTTERFLY}, 50, {1})
                 local knowledge = API.GetAllObjArray1({ID.KNOWLEDGE}, 50, {1})
+                local serenSpirits = API.GetAllObjArray1({ID.SEREN_SPIRIT}, 50, {1})
 
-                if #butterflies > 0 or #knowledge > 0 then
+                if #butterflies > 0 or #knowledge > 0 or #serenSpirits > 0 then
                     print("Priority target detected, interrupting siphon")
                     break
                 end
