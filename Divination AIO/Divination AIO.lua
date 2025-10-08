@@ -671,11 +671,11 @@ end
 local function checkEquipment()
     if LEAGUES then
         if HATCHET_OF_DIVINITY then
-            if not API.Container_Check_Items(94, {ID.HATCHET}) then
-                print("ERROR: Leagues - Hatchet of divinity (id = " .. ID.HATCHET .. ") not equipped!")
+            if API.GetVarbitValue(58433) ~= 1 then
+                print("ERROR: Leagues - Hatchet of divinity (varbit 58433) not active!")
                 return false
             end
-            print("Leagues - Hatchet of divinity equipped.")
+            print("Leagues - Hatchet of divinity active.")
         elseif MEMORY_DOWSER then
             if not API.Container_Check_Items(94, {ID.MEMORY_DOWSER}) then
                 print("ERROR: Leagues - Memory Dowser (id = " .. ID.MEMORY_DOWSER .. ") not equipped!")
